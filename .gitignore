@@ -1,0 +1,58 @@
+# =====================
+# Fichiers Python
+# =====================
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.log
+
+# =====================
+# Environnements virtuels / dépendances
+# =====================
+.env/
+venv/
+env/
+node_modules/
+
+# =====================
+# Fichiers Odoo temporaires
+# =====================
+*.db
+*.sql
+*.dump
+*.zip
+*.tar
+*.bak
+*.egg-info/
+
+# =====================
+# IDE et éditeurs
+# =====================
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# =====================
+# Fichiers générés par Windows
+# =====================
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# =====================
+# Custom Addons Odoo
+# =====================
+custom_addons/*/__pycache__/
+custom_addons/*/*.pyc
+custom_addons/*/*.pyo
+
+# =====================
+# Tests et cache
+# =====================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/

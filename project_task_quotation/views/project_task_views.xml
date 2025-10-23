@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_task_form_inherit_create_quotation" model="ir.ui.view">
+    <field name="name">project.task.form.inherit.create.quotation.from.invoice.ref</field>
+    <field name="model">project.task</field>
+    <field name="inherit_id" ref="project.view_task_form2"/>
+    <field name="arch" type="xml">
+
+      <xpath expr="//sheet//group" position="inside">
+        <group string="Facturation &amp; Devis">
+          <field name="invoice_ref" placeholder="Ex: FAC/2025/0001, code suivi, etc."/>
+          <field name="sale_order_id" readonly="1" context="{'form_view_ref':'sale.view_order_form'}"/>
+          <field name="existing_sale_id" readonly="1" invisible="1"/>
+          <field name="is_colis_recue_mada" readonly="1" invisible="1"/>
+        </group>
+      </xpath>
+
+      <xpath expr="//header" position="inside">
+        <button name="action_create_quotation_from_invoice_ref"
+                string="Créer devis"
+                type="object"
+                class="oe_highlight"
+                modifiers='{"invisible": ["|","|",
+                  ["is_colis_recue_mada","=", false],
+                  ["sale_order_id","!=", false],
+                  ["existing_sale_id","!=", false]
+                ]}'
+                help="Crée un devis. Si aucune facture n’est trouvée par la Référence facture, le client de la tâche est utilisé."/>
+      </xpath>
+
+    </field>
+  </record>
+</odoo>

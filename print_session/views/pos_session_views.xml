@@ -1,0 +1,52 @@
+<odoo>
+    <!-- Vue liste personnalisée -->
+    <record id="view_pos_session_tree_custom" model="ir.ui.view">
+        <field name="name">pos.session.tree.custom</field>
+        <field name="model">pos.session</field>
+        <field name="arch" type="xml">
+            <tree string="Sessions de Point de Vente (Fermées)">
+                <field name="name"/>
+                <field name="user_id"/>
+                <field name="config_id"/>
+                <field name="start_at"/>
+                <field name="stop_at"/>
+                <field name="state"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Action fenêtre avec filtre : uniquement les sessions fermées -->
+    <record id="action_pos_session_list_closed" model="ir.actions.act_window">
+        <field name="name">Sessions PDV Fermées</field>
+        <field name="res_model">pos.session</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[('state','=','closed')]</field>
+        <field name="help" type="html">
+            <p>Liste des sessions clôturées et comptabilisées.</p>
+        </field>
+    </record>
+
+    <!-- Menu -->
+    <menuitem id="menu_pos_session_list"
+              name="Sessions PDV (Fermées)"
+              parent="point_of_sale.menu_point_root"
+              action="action_pos_session_list_closed"
+              sequence="50"/>
+
+    <!-- Bouton "Imprimer" dans le formulaire de session PDV -->
+   <record id="view_pos_session_form_inherit_print_button" model="ir.ui.view">
+    <field name="name">pos.session.form.inherit.print.button</field>
+    <field name="model">pos.session</field>
+    <field name="inherit_id" ref="point_of_sale.view_pos_session_form"/>
+    <field name="arch" type="xml">
+        <xpath expr="//header" position="inside">
+            <button name="action_print_summary"
+                    string="Imprimero"
+                    type="object"
+                    class="btn-primary"
+                    if="state == 'closed'"/>
+        </xpath>
+    </field>
+</record>
+
+</odoo>

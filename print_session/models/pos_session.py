@@ -1,0 +1,86 @@
+import requests
+from odoo import models, _
+from odoo.exceptions import UserError
+from collections import defaultdict
+
+class PosSession(models.Model):
+    _inherit = 'pos.session'
+
+    def action_print_summary(self):
+        for session in self:
+            # --- Ventes groupées par catégorie POS ---
+            category_sales = defaultdict(lambda: {
+                'qty': 0.0,
+                'total': 0.0,
+                'lines': []
+            })
+
+            for order in session.order_ids:
+                for line in order.lines:
+                    category = getattr(line.product_id, 'pos_category', False)
+                    category_name = category.display_name if category else "Sans catégorie POS"
+                    cat_data = category_sales[category_name]
+                    cat_data['qty'] += line.qty
+                    cat_data['total'] += line.price_subtotal_incl
+                    cat_data['lines'].append({
+                        "product_code": line.product_id.default_code or '',
+                        "product_name": line.product_id.name,
+                        "qty": line.qty,
+                        "price_unit": line.price_unit,
+                        "subtotal": line.price_subtotal_incl,
+                    })
+
+            # --- Paiements ---
+            payment_data = defaultdict(float)
+            for order in session.order_ids:
+                for payment in order.payment_ids:
+                    payment_data[payment.payment_method_id.name] += payment.amount
+
+            # --- Remises ---
+            total_discount = sum(
+                l.price_unit * l.qty * (l.discount or 0.0) / 100
+                for o in session.order_ids for l in o.lines
+            )
+            discount_count = sum(1 for o in session.order_ids for l in o.lines if l.discount)
+
+            # --- Construction du payload ---
+            payload = {
+                'session_name': session.name,
+                'start_time': session.start_at.isoformat() if session.start_at else '',
+                'end_time': session.stop_at.isoformat() if session.stop_at else '',
+                'sales_by_category': [],
+                'payments': [],
+                'discount': {
+                    'count': discount_count,
+                    'total': total_discount
+                }
+            }
+
+            for category, data in category_sales.items():
+                payload['sales_by_category'].append({
+                    'category': category,
+                    'qty': data['qty'],
+                    'total': data['total'],
+                    'lines': data['lines']
+                })
+
+            for method, amount in payment_data.items():
+                payload['payments'].append({
+                    'method': method,
+                    'amount': amount
+                })
+
+            # --- Envoi à Flask ---
+            try:
+                response = requests.post(
+                    "http://127.0.0.1:5000/print_session",
+                    json=payload,
+                    headers={'X-API-KEY': 'odoo1234'},
+                    timeout=10
+                )
+                if response.status_code != 200:
+                    raise UserError(_("Erreur d'impression : %s") % response.text)
+            except requests.exceptions.RequestException as e:
+                raise UserError(_("Impossible de contacter le serveur d'impression : %s") % str(e))
+
+        return True
