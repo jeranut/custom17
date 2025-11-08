@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Modifier la vue liste (tree) des lignes de commande d'achat -->
+    <record id="view_purchase_order_line_tree_hide_columns" model="ir.ui.view">
+        <field name="name">purchase.order.line.tree.hide.columns</field>
+        <field name="model">purchase.order.line</field>
+        <field name="inherit_id" ref="purchase.purchase_order_line_tree"/>
+        <field name="arch" type="xml">
+            <!-- Masquer la colonne Taxes -->
+            <xpath expr="//field[@name='taxes_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <!-- Masquer la colonne Sous-total (tax excl.) -->
+            <xpath expr="//field[@name='price_subtotal']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Modifier la vue formulaire (form) du bon de commande d'achat -->
+    <record id="view_purchase_order_form_hide_columns" model="ir.ui.view">
+        <field name="name">purchase.order.form.hide.columns</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <!-- Masquer la colonne Taxes dans l'onglet "Lignes de commande" -->
+            <xpath expr="//field[@name='order_line']/tree/field[@name='taxes_id']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+
+            <!-- Masquer la colonne Sous-total (tax excl.) -->
+            <xpath expr="//field[@name='order_line']/tree/field[@name='price_subtotal']" position="attributes">
+                <attribute name="invisible">1</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

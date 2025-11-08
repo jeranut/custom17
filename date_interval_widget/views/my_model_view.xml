@@ -1,0 +1,43 @@
+<odoo>
+    <record id="view_form_my_model" model="ir.ui.view">
+        <field name="name">my.model.form</field>
+        <field name="model">my.model</field>
+        <field name="arch" type="xml">
+            <form string="Intervalle de Dates">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="start_date"/>
+                        <field name="end_date"/>
+                        <field name="day_count" readonly="1"/>
+                    </group>
+                    <separator string="Liste des jours (tableau déroulant horizontal)" colspan="2"/>
+                    <field name="day_list_html" readonly="1" nolabel="1"/>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_tree_my_model" model="ir.ui.view">
+        <field name="name">my.model.tree</field>
+        <field name="model">my.model</field>
+        <field name="arch" type="xml">
+            <tree string="Intervalles de Dates">
+                <field name="name"/>
+                <field name="start_date"/>
+                <field name="end_date"/>
+                <field name="day_count"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="action_my_model" model="ir.actions.act_window">
+        <field name="name">Intervalles de Dates</field>
+        <field name="res_model">my.model</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <menuitem id="menu_date_interval_root" name="Gestion des Intervalles" sequence="10"/>
+    <menuitem id="menu_date_interval_model" name="Intervalles de Dates"
+              parent="menu_date_interval_root" action="action_my_model" sequence="20"/>
+</odoo>

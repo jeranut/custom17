@@ -1,68 +1,89 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <templates xml:space="preserve">
-    <t t-name="RoomSummary" owl="1">
-        <div style="overflow:auto;">
-            <table border="1" t-ref="textarea">
-                <t
-                    t-foreach="state.summary_header"
-                    t-as="header_detail"
-                    t-key="header_detail_index"
-                >
-                    <tr>
-                        <t
-                            t-foreach="header_detail.header"
-                            t-as="date"
-                            t-key="date_index"
-                        >
-                            <th class="table_header" style="text-align:center;">
-                                <t t-esc="date" />
-                            </th>
+    <t t-name="RoomSummary" owl="2">
+        <div class="o_room_summary_container" style="overflow:auto; padding:10px; min-height:200px;">
+            <!-- Si les données sont disponibles -->
+            <t t-if="state and state.room_summary and state.room_summary.length > 0">
+                <table class="o_room_summary_table" border="1" style="border-collapse: collapse; width:100%;">
+                    <!-- En-têtes -->
+                    <t t-if="state.summary_header and state.summary_header.length > 0">
+                        <tr>
+                            <t t-foreach="state.summary_header[0].header" t-as="date" t-key="date_index">
+                                <th style="text-align:center; padding:6px; background:#f3f3f3; border:1px solid #ddd; position:sticky; top:0;">
+                                    <t t-esc="date"/>
+                                </th>
+                            </t>
+                        </tr>
+                    </t>
+
+                    <!-- Détails des chambres -->
+                    <t t-foreach="state.room_summary" t-as="detail" t-key="detail_index">
+                        <t t-if="detail and detail.name">
+                            <tr>
+                                <td style="text-align:center; font-weight:bold; padding:4px; border:1px solid #ddd; background:#fafafa;">
+                                    <t t-esc="detail.name"/>
+                                </td>
+                                <t t-if="detail.value and detail.value.length">
+                                    <t t-foreach="detail.value" t-as="status" t-key="status_index">
+                                        <t t-if="status">
+                                            <!-- Libre -->
+                                            <t t-if="status.state === 'Free'">
+                                                <td class="table_free"
+                                                    style="text-align:center; background:#d4edda; cursor:pointer; border:1px solid #ccc;"
+                                                    t-att-data-room="status.room_id"
+                                                    t-att-date="status.date"
+                                                    t-on-click="(ev) => this.load_form(status.room_id, status.date, ev)">
+                                                    <t t-esc="status.state"/>
+                                                </td>
+                                            </t>
+                                            <!-- Réservé confirmé -->
+                                            <t t-if="status.state !== 'Free' and status.is_draft === 'No'">
+                                                <td class="table_reserved"
+                                                    style="text-align:center; background:#f8d7da; border:1px solid #ccc;">
+                                                    <t t-esc="status.state"/>
+                                                </td>
+                                            </t>
+                                            <!-- Réservé brouillon -->
+                                            <t t-if="status.is_draft === 'Yes'">
+                                                <td class="table_reserved_draft"
+                                                    style="text-align:center; background:#fff3cd; border:1px solid #ccc;">
+                                                    <t t-esc="status.state"/>
+                                                </td>
+                                            </t>
+                                        </t>
+                                    </t>
+                                </t>
+                            </tr>
                         </t>
-                    </tr>
-                </t>
-                <t t-foreach="state.room_summary" t-as="detail" t-key="detail_index">
-                    <tr>
-                        <td style="text-align:center;">
-                            <t t-esc="detail.name" />
-                        </td>
-                        <t t-foreach="detail.value" t-as="status" t-key="status_index">
-                            <t t-if="status.state == 'Free'">
-                                <td
-                                    class="table_free"
-                                    t-att-data="status.room_id"
-                                    t-on-click="(ev) => this.load_form(status.room_id,status.date, ev)"
-                                    t-att-date="status.date"
-                                    style="text-align:center;"
-                                >
-                                    <t t-esc="status.state" />
-                                </td>
-                            </t>
-                            <t
-                                t-if="status.state != 'Free' and status.is_draft == 'No'"
-                            >
-                                <td
-                                    class="table_reserved"
-                                    t-att-data-model="status.data_model"
-                                    t-att-data-id="status.data_id"
-                                    style="text-align:center;"
-                                >
-                                    <t t-esc="status.state" />
-                                </td>
-                            </t>
-                            <t t-if="status.is_draft == 'Yes'">
-                                <td
-                                    class="table_reserved1"
-                                    t-att-data-model="status.data_model"
-                                    t-att-data-id="status.data_id"
-                                    style="text-align:center;"
-                                >
-                                    <t t-esc="status.state" />
-                                </td>
-                            </t>
-                        </t>
-                    </tr>
-                </t>
-            </table>
+                    </t>
+                </table>
+            </t>
+
+            <!-- Loader si aucune donnée n'est encore chargée -->
+            <t t-else="">
+                <div style="display:flex; justify-content:center; align-items:center; height:100%;">
+                    <div style="text-align:center;">
+                        <div class="loader" style="
+                            border: 4px solid #f3f3f3;
+                            border-top: 4px solid #3498db;
+                            border-radius: 50%;
+                            width: 40px;
+                            height: 40px;
+                            animation: spin 1s linear infinite;
+                            margin:auto;">
+                        </div>
+                        <p style="color:#666; margin-top:10px;">Chargement du résumé des chambres...</p>
+                    </div>
+                </div>
+            </t>
         </div>
+
+        <!-- Petite animation CSS pour le loader -->
+        <style>
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        </style>
     </t>
 </templates>

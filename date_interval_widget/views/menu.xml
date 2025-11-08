@@ -1,0 +1,11 @@
+<odoo>
+    <menuitem id="menu_date_interval_root"
+              name="Gestion des Intervalles"
+              sequence="10"/>
+
+    <menuitem id="menu_date_interval_model"
+              name="Intervalles de Dates"
+              parent="menu_date_interval_root"
+              action="action_my_model"
+              sequence="20"/>
+</odoo>

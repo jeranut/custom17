@@ -1,0 +1,7 @@
+<odoo>
+    <data>
+        <record id="group_date_interval_user" model="res.groups">
+            <field name="name">Date Interval User</field>
+        </record>
+    </data>
+</odoo>

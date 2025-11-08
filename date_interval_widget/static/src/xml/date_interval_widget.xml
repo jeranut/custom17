@@ -1,0 +1,24 @@
+<templates xml:space="preserve">
+    <t t-name="date_interval_widget.DateIntervalWidgetTemplate">
+        <div class="o_date_interval_widget">
+            <t t-if="state.days.length">
+                <table class="table table-sm table-bordered mt-2">
+                    <thead>
+                        <tr><th>Jour</th><th>Date</th></tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="state.days" t-as="day" t-key="day">
+                            <tr>
+                                <td><t t-esc="day.toLocaleDateString('fr-FR', { weekday: 'long' })"/></td>
+                                <td><t t-esc="day.toLocaleDateString('fr-FR')"/></td>
+                            </tr>
+                        </t>
+                    </tbody>
+                </table>
+            </t>
+            <t t-else="">
+                <em>Sélectionnez un intervalle de dates.</em>
+            </t>
+        </div>
+    </t>
+</templates>
