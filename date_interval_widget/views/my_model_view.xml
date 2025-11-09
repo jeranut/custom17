@@ -9,7 +9,7 @@
                         <field name="start_date"/>
                         <field name="end_date"/>
                     </group>
-                    <separator string="Planning des chambres (horizontal)" colspan="2"/>
+                    <separator string="Planning des chambres (états)" colspan="2"/>
                     <field name="day_list_html" readonly="1" nolabel="1"/>
                 </sheet>
             </form>

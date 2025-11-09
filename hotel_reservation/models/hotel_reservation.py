@@ -99,6 +99,7 @@ class HotelReservation(models.Model):
         [
             ("draft", "Draft"),
             ("confirm", "Confirm"),
+            ("in", "In"),        # <-- nouvel état ajouté
             ("cancel", "Cancel"),
             ("done", "Done"),
         ],
@@ -444,7 +445,8 @@ class HotelReservation(models.Model):
             folio = hotel_folio_obj.create(folio_vals)
             for rm_line in folio.room_line_ids:
                 rm_line._onchange_product_id()
-            self.write({"folio_id": [(6, 0, folio.ids)], "state": "done"})
+            # passer l'état à "in" lorsque le folio est créé (= client arrivé)
+            self.write({"folio_id": [(6, 0, folio.ids)], "state": "in"})
         return True
 
     def _onchange_check_dates(
