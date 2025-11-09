@@ -15,20 +15,4 @@
             </form>
         </field>
     </record>
-
-    <record id="action_my_model" model="ir.actions.act_window">
-        <field name="name">Planning des Chambres</field>
-        <field name="res_model">my.model</field>
-        <field name="view_mode">form</field>
-    </record>
-
-    <menuitem id="menu_date_interval_root"
-              name="Gestion des Intervalles"
-              sequence="10"/>
-
-    <menuitem id="menu_date_interval_model"
-              name="Planning des Chambres"
-              parent="menu_date_interval_root"
-              action="action_my_model"
-              sequence="20"/>
 </odoo>

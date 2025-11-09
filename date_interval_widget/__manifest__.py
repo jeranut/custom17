@@ -5,7 +5,6 @@
     'data': [
         'security/security.xml',
         'views/my_model_view.xml',       # L’action est ici -> doit venir avant
-        'views/menu.xml',                # Le menu fait référence à cette action
         'security/ir.model.access.csv',  # CSV à la fin
     ],
     'assets': {

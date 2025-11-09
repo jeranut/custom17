@@ -35,7 +35,6 @@ class HotelFolio(models.Model):
                 rec.display_name = str(rec.order_id.name)
                 res.append((rec.id, fname))
 
-
     @api.model
     def name_search(self, name="", args=None, operator="ilike", limit=100):
         if args is None:
@@ -82,8 +81,8 @@ class HotelFolio(models.Model):
         "hotel.service.line",
         "folio_id",
         help="Hotel services details provided to"
-        "Customer and it will included in "
-        "the main Invoice.",
+             "Customer and it will included in "
+             "the main Invoice.",
     )
     hotel_policy = fields.Selection(
         [
@@ -93,14 +92,14 @@ class HotelFolio(models.Model):
         ],
         default="manual",
         help="Hotel policy for payment that "
-        "either the guest has to payment at "
-        "booking time or check-in "
-        "check-out time.",
+             "either the guest has to payment at "
+             "booking time or check-in "
+             "check-out time.",
     )
     duration = fields.Float(
         "Duration in Days",
         help="Number of days which will automatically "
-        "count from the check-in and check-out date. ",
+             "count from the check-in and check-out date. ",
     )
     hotel_invoice_id = fields.Many2one("account.move", "Invoice", copy=False)
     duration_dummy = fields.Float()
@@ -116,7 +115,7 @@ class HotelFolio(models.Model):
         for rec in self:
             for product in rec.room_line_ids.mapped("product_id"):
                 for line in rec.room_line_ids.filtered(
-                    lambda x, product=product: x.product_id == product
+                        lambda x, product=product: x.product_id == product
                 ):
                     record = rec.room_line_ids.search(
                         [
@@ -260,12 +259,18 @@ class HotelFolio(models.Model):
             order.state = "sale"
             if not order.analytic_account_id:
                 if order.order_line.filtered(
-                    lambda line: line.product_id.invoice_policy == "cost"
+                        lambda line: line.product_id.invoice_policy == "cost"
                 ):
                     order._create_analytic_account()
             config_parameter_obj = self.env["ir.config_parameter"]
             if config_parameter_obj.sudo().get_param("sale.auto_done_setting"):
                 self.order_id.action_done()
+
+    def action_confirm_and_invoice(self):
+        self.action_confirm()
+        action = self.env.ref("sale.action_view_sale_advance_payment_inv").read()[0]
+        action["context"] = dict(self.env.context, active_ids=self.order_id.ids, active_model="sale.order")
+        return action
 
     def action_cancel_draft(self):
         """
@@ -377,10 +382,10 @@ class HotelFolioLine(models.Model):
             pricelist_item = PricelistItem.browse(rule_id)
             if pricelist_item.pricelist_id.discount_policy == "without_discount":
                 while (
-                    pricelist_item.base == "pricelist"
-                    and pricelist_item.base_pricelist_id
-                    and pricelist_item.base_pricelist_id.discount_policy
-                    == "without_discount"
+                        pricelist_item.base == "pricelist"
+                        and pricelist_item.base_pricelist_id
+                        and pricelist_item.base_pricelist_id.discount_policy
+                        == "without_discount"
                 ):
                     price, rule_id = pricelist_item.base_pricelist_id.with_context(
                         uom=uom.id
@@ -398,9 +403,9 @@ class HotelFolioLine(models.Model):
             currency_id = pricelist_item.pricelist_id.currency_id
 
         product_currency = (
-            product_currency
-            or (product.company_id and product.company_id.currency_id)
-            or self.env.user.company_id.currency_id
+                product_currency
+                or (product.company_id and product.company_id.currency_id)
+                or self.env.user.company_id.currency_id
         )
         if not currency_id:
             currency_id = product_currency
@@ -463,10 +468,10 @@ class HotelFolioLine(models.Model):
         for line in self:
             line = line.with_company(line.company_id)
             fpos = (
-                line.order_id.fiscal_position_id
-                or line.order_id.fiscal_position_id._get_fiscal_position(
-                    line.order_partner_id
-                )
+                    line.order_id.fiscal_position_id
+                    or line.order_id.fiscal_position_id._get_fiscal_position(
+                line.order_partner_id
+            )
             )
             # If company_id is set, always filter taxes by the company
             taxes = line.product_id.taxes_id.filtered(
@@ -621,13 +626,13 @@ class HotelServiceLine(models.Model):
     def _compute_tax_id(self):
         for line in self:
             fpos = (
-                line.folio_id.fiscal_position_id
-                or line.folio_id.partner_id.property_account_position_id
+                    line.folio_id.fiscal_position_id
+                    or line.folio_id.partner_id.property_account_position_id
             )
             # If company_id is set, always filter taxes by the company
             taxes = line.product_id.taxes_id.filtered(
                 lambda r, line=line: not line.company_id
-                or r.company_id == line.company_id
+                                     or r.company_id == line.company_id
             )
             line.tax_id = (
                 fpos.map_tax(taxes, line.product_id, line.folio_id.partner_shipping_id)
@@ -651,10 +656,10 @@ class HotelServiceLine(models.Model):
             pricelist_item = PricelistItem.browse(rule_id)
             if pricelist_item.pricelist_id.discount_policy == "without_discount":
                 while (
-                    pricelist_item.base == "pricelist"
-                    and pricelist_item.base_pricelist_id
-                    and pricelist_item.base_pricelist_id.discount_policy
-                    == "without_discount"
+                        pricelist_item.base == "pricelist"
+                        and pricelist_item.base_pricelist_id
+                        and pricelist_item.base_pricelist_id.discount_policy
+                        == "without_discount"
                 ):
                     price, rule_id = pricelist_item.base_pricelist_id.with_context(
                         uom=uom.id
@@ -672,9 +677,9 @@ class HotelServiceLine(models.Model):
             currency_id = pricelist_item.pricelist_id.currency_id
 
         product_currency = (
-            product_currency
-            or (product.company_id and product.company_id.currency_id)
-            or self.env.user.company_id.currency_id
+                product_currency
+                or (product.company_id and product.company_id.currency_id)
+                or self.env.user.company_id.currency_id
         )
         if not currency_id:
             currency_id = product_currency
