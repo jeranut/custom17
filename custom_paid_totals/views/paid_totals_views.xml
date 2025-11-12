@@ -1,0 +1,63 @@
+<odoo>
+    <!-- Vue liste -->
+    <record id="view_account_daily_balance_tree" model="ir.ui.view">
+        <field name="name">account.daily.balance.tree</field>
+        <field name="model">account.daily.balance</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="date"/>
+                <field name="total_debit"/>
+                <field name="total_credit"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vue formulaire -->
+    <record id="view_account_daily_balance_form" model="ir.ui.view">
+        <field name="name">account.daily.balance.form</field>
+        <field name="model">account.daily.balance</field>
+        <field name="arch" type="xml">
+            <form string="Totaux Journaliers">
+                <header>
+                    <button name="action_update_totals" type="object" string="Mettre à jour les totaux" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <group>
+                        <field name="date"/>
+                    </group>
+                    <group>
+                        <field name="total_debit" readonly="1"/>
+                        <field name="total_credit" readonly="1"/>
+                    </group>
+                    <separator string="Détails"/>
+                    <field name="line_ids" nolabel="1">
+                        <tree editable="false">
+                            <field name="reference"/>
+                            <field name="libelle"/>
+                            <field name="debit"/>
+                            <field name="credit"/>
+                        </tree>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_paid_daily_total" model="ir.actions.act_window">
+        <field name="name">Totaux Journaliers</field>
+        <field name="res_model">account.daily.balance</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- Menus -->
+    <menuitem id="menu_paid_totals_main"
+              name="Rapports Financiers"
+              sequence="50"/>
+
+    <menuitem id="menu_paid_totals_list"
+              name="Totaux Journaliers"
+              parent="menu_paid_totals_main"
+              action="action_paid_daily_total"
+              sequence="1"/>
+</odoo>

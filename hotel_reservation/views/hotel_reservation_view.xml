@@ -128,7 +128,7 @@
                                 <tree>
                                     <field
                                             name="reserve"
-                                            string="Rooms"
+                                            string="Rooms here"
                                             widget="many2many_tags"
                                     />
                                 </tree>

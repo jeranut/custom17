@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <!-- Définition du composant -->
+    <t t-name="custom_pos_screen.ProductCombosButton" owl="1">
+        <button class="control-button btn btn-light rounded-0 fw-bolder"
+                t-on-click="() => this.click()">
+            <i class="fa fa-align-justify me-1"
+               role="img"
+               aria-label="Product Combos"
+               title="Product Combos"/>
+            Product Combos
+        </button>
+    </t>
+
+    <!-- Insertion dans le PaymentScreen -->
+    <t t-inherit="point_of_sale.PaymentScreenButtons" t-inherit-mode="extension">
+        <xpath expr="//div[contains(@class, 'payment-buttons')]" position="inside">
+            <ProductCombosButton/>
+        </xpath>
+    </t>
+</templates>

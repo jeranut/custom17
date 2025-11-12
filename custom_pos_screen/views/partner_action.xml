@@ -1,0 +1,11 @@
+<odoo>
+    <!-- Action pour ouvrir la liste des folios en état "draft" -->
+    <record id="action_folio_from_pos" model="ir.actions.act_window">
+        <field name="name">Hotel Folios (Draft)</field>
+        <field name="res_model">hotel.folio</field>
+        <field name="view_mode">tree,form</field>
+        <field name="target">new</field>
+        <!-- 👇 On affiche uniquement les folios en état "draft" -->
+        <field name="domain">[('state', '=', 'draft')]</field>
+    </record>
+</odoo>

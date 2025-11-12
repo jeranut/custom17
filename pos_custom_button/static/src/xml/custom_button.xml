@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<templates xml:space="preserve">
-    <t t-name="CustomButton" owl="1">
-        <div class="control-button" t-on-click="onClick" style="cursor:pointer;">
-            <i class="fa fa-star"/> Custom Btn
-        </div>
-    </t>
+<templates id="template" xml:space="preserve">
+    <t t-name="pos_button.PaymentScreenButtons"
+   	t-inherit="point_of_sale.PaymentScreenButtons"
+   	t-inherit-mode="extension">
+	<xpath expr="//div[hasclass('payment-buttons')]" position="inside">   	<button class="button button-partial-payment btn btn-light py-3 text-start rounded-0 border-bottom"
+           	t-on-click="onClick">
+           	<i class="fa fa-money me-2"/>Custom Button
+       	</button>
+   	</xpath>
+   </t>
 </templates>

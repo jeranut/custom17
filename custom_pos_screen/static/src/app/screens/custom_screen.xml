@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="custom_pos_screen.CustomScreen" owl="1">
+        <div class="custom-screen p-4">
+            <div class="header flex justify-between items-center">
+                <h2>🌟 Custom POS Screen</h2>
+                <button class="btn btn-secondary" t-on-click="back">Back</button>
+            </div>
+
+            <div class="content mt-3">
+                <p>Hello from your custom POS screen for Odoo 17!</p>
+            </div>
+        </div>
+    </t>
+</templates>

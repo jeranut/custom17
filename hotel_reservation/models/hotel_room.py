@@ -1,6 +1,3 @@
-# Copyright (C) 2024-TODAY Serpent Consulting Services Pvt. Ltd. (<http://www.serpentcs.com>).
-# License AGPL-3.0 or later (http://www.gnu.org/licenses/agpl).
-
 import logging
 from datetime import datetime, timedelta
 
@@ -46,48 +43,31 @@ class HotelRoom(models.Model):
 
     @api.model
     def cron_room_line(self):
-        """
-        This method is for scheduler
-        every 1min scheduler will call this method and check Status of
-        room is occupied or available
-        --------------------------------------------------------------
-        @param self: The object pointer
-        @return: update status of hotel room reservation line
-        """
         reservation_line_obj = self.env["hotel.room.reservation.line"]
         folio_room_line_obj = self.env["folio.room.line"]
-        curr_date = fields.Datetime.now().strftime(dt)
+        curr_date = fields.Datetime.now()
+
         for room in self.search([]):
             reserv_line_ids = room.room_reservation_line_ids.ids
-            reservation_line_ids = reservation_line_obj.search(
-                [
-                    ("id", "in", reserv_line_ids),
-                    ("check_in", "<=", curr_date),
-                    ("check_out", ">=", curr_date),
-                ]
-            )
+            reservation_line_ids = reservation_line_obj.search([
+                ("id", "in", reserv_line_ids),
+                ("check_in", "<=", curr_date),
+                ("check_out", ">=", curr_date),
+                ("state", "in", ["confirm", "assigned"]),
+            ])
+
             rooms_ids = room.room_line_ids.ids
-            room_line_ids = folio_room_line_obj.search(
-                [
-                    ("id", "in", rooms_ids),
-                    ("check_in", "<=", curr_date),
-                    ("check_out", ">=", curr_date),
-                ]
-            )
+            room_line_ids = folio_room_line_obj.search([
+                ("id", "in", rooms_ids),
+                ("check_in", "<=", curr_date),
+                ("check_out", ">=", curr_date),
+                ("status", "not in", ["cancel", "draft"]),
+            ])
+
             status = {"isroom": True, "color": 5}
-            if reservation_line_ids:
+            if reservation_line_ids or room_line_ids:
                 status = {"isroom": False, "color": 2}
             room.write(status)
-            if room_line_ids:
-                status = {"isroom": False, "color": 2}
-            room.write(status)
-            if reservation_line_ids and room_line_ids:
-                raise ValidationError(
-                    _(
-                        "Please Check Rooms Status for %(room_name)s.",
-                        room_name=room.name,
-                    )
-                )
         return True
 
 
@@ -229,29 +209,18 @@ class RoomReservationSummary(models.Model):
                                         c_id = c_id1.company_id
                                         con_add = 0
                                         amin = 0.0
-                                        # When configured_addition_hours is
-                                        # greater than zero then we calculate
-                                        # additional minutes
                                         if c_id:
                                             con_add = c_id.additional_hours
                                         if con_add > 0:
                                             amin = abs(con_add * 60)
                                         hr_dur = abs(dur.seconds / 60)
                                         if amin > 0:
-                                            # When additional minutes is greater
-                                            # than zero then check duration with
-                                            # extra minutes and give the room
-                                            # reservation status is reserved
-                                            # --------------------------
                                             if hr_dur >= amin:
                                                 reservline_ids = True
                                             else:
                                                 reservline_ids = False
                                         else:
-                                            if hr_dur > 0:
-                                                reservline_ids = True
-                                            else:
-                                                reservline_ids = False
+                                            reservline_ids = hr_dur > 0
                                     else:
                                         reservline_ids = False
                         fol_room_line_ids = room.room_line_ids.ids
