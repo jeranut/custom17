@@ -6,8 +6,10 @@
         <field name="arch" type="xml">
             <tree>
                 <field name="date"/>
+                <field name="ancien_solde"/>
                 <field name="total_debit"/>
                 <field name="total_credit"/>
+                <field name="nouveau_solde"/>
             </tree>
         </field>
     </record>
@@ -19,18 +21,32 @@
         <field name="arch" type="xml">
             <form string="Totaux Journaliers">
                 <header>
-                    <button name="action_update_totals" type="object" string="Mettre à jour les totaux" class="btn-primary"/>
+                    <button name="action_update_totals"
+                            type="object"
+                            string="Mettre à jour les totaux"
+                            class="btn-primary"/>
                 </header>
+
                 <sheet>
                     <group>
                         <field name="date"/>
                     </group>
+
                     <group>
+                        <field name="ancien_solde"/>
                         <field name="total_debit" readonly="1"/>
                         <field name="total_credit" readonly="1"/>
+                        <field name="nouveau_solde" readonly="1"/>
                     </group>
-                    <separator string="Détails"/>
-                    <field name="line_ids" nolabel="1">
+
+                    <!-- Champ de contrôle invisible -->
+                    <field name="show_lines" invisible="1"/>
+
+                    <separator string="Détails du jour"/>
+
+                    <!-- Lignes visibles seulement après clic -->
+                    <field name="line_ids" nolabel="1"
+                           modifiers="{'invisible': [('show_lines', '=', False)]}">
                         <tree editable="false">
                             <field name="reference"/>
                             <field name="libelle"/>
