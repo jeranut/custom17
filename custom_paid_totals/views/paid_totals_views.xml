@@ -1,5 +1,4 @@
 <odoo>
-    <!-- Vue formulaire -->
     <record id="view_account_daily_balance_form" model="ir.ui.view">
         <field name="name">account.daily.balance.form</field>
         <field name="model">account.daily.balance</field>
@@ -18,23 +17,21 @@
                     </group>
 
                     <group>
-                        <!-- 🔒 Champ ancien_solde rendu non modifiable -->
                         <field name="ancien_solde" readonly="1"/>
                         <field name="total_debit" readonly="1"/>
                         <field name="total_credit" readonly="1"/>
                         <field name="nouveau_solde" readonly="1"/>
                     </group>
 
-                    <!-- ⚙️ Champ logique invisible pour le contrôle -->
                     <field name="show_lines" invisible="1"/>
 
                     <separator string="Détails du jour"/>
 
-                    <!-- ✅ Vue verrouillée : aucune suppression ni ajout manuel -->
                     <field name="line_ids" nolabel="1" modifiers='{"invisible": [["show_lines", "=", false]]}'>
                         <tree editable="false" create="false" delete="false">
                             <field name="reference"/>
                             <field name="libelle"/>
+                            <field name="payment"/> <!-- nouvelle colonne -->
                             <field name="debit"/>
                             <field name="credit"/>
                         </tree>
@@ -44,7 +41,6 @@
         </field>
     </record>
 
-    <!-- Vue liste -->
     <record id="view_account_daily_balance_tree" model="ir.ui.view">
         <field name="name">account.daily.balance.tree</field>
         <field name="model">account.daily.balance</field>
@@ -59,7 +55,7 @@
         </field>
     </record>
 
-    <!-- Vue du wizard -->
+    <!-- Wizard -->
     <record id="view_account_daily_balance_init_wizard" model="ir.ui.view">
         <field name="name">account.daily.balance.init.wizard.form</field>
         <field name="model">account.daily.balance.init.wizard</field>
@@ -69,26 +65,19 @@
                     <field name="initial_balance"/>
                 </group>
                 <footer>
-                    <button name="action_confirm"
-                            type="object"
-                            string="Valider"
-                            class="btn-primary"/>
-                    <button string="Annuler"
-                            special="cancel"
-                            class="btn-secondary"/>
+                    <button name="action_confirm" type="object" string="Valider" class="btn-primary"/>
+                    <button string="Annuler" special="cancel" class="btn-secondary"/>
                 </footer>
             </form>
         </field>
     </record>
 
-    <!-- Action -->
     <record id="action_paid_daily_total" model="ir.actions.act_window">
         <field name="name">Totaux Journaliers</field>
         <field name="res_model">account.daily.balance</field>
         <field name="view_mode">tree,form</field>
     </record>
 
-    <!-- Menus -->
     <menuitem id="menu_paid_totals_main"
               name="Rapports Financiers"
               sequence="50"/>

@@ -87,7 +87,7 @@ class AccountDailyBalance(models.Model):
             total_credit = 0
             total_debit = 0
 
-            # Factures clients (credit)
+            # Factures clients CASH uniquement
             client_invoices = self.env['account.move'].search([
                 ('move_type', '=', 'out_invoice'),
                 ('payment_state', '=', 'paid'),
@@ -95,16 +95,23 @@ class AccountDailyBalance(models.Model):
                 ('state', '=', 'posted')
             ])
             for inv in client_invoices:
+                payments = inv._get_reconciled_payments()
+                payment = payments[0] if payments else False
+
+                if not payment or payment.journal_id.type != "cash":
+                    continue
+
                 self.env['account.daily.balance.line'].create({
                     'balance_id': record.id,
                     'reference': inv.name,
                     'libelle': inv.journal_label,
+                    'payment': "cash",
                     'debit': 0.0,
                     'credit': inv.amount_total,
                 })
-            total_credit += sum(client_invoices.mapped('amount_total'))
+            total_credit += sum([inv.amount_total for inv in client_invoices if inv._get_reconciled_payments() and inv._get_reconciled_payments()[0].journal_id.type == "cash"])
 
-            # Factures fournisseurs (debit)
+            # Factures fournisseurs CASH uniquement
             vendor_bills = self.env['account.move'].search([
                 ('move_type', '=', 'in_invoice'),
                 ('payment_state', '=', 'paid'),
@@ -112,16 +119,23 @@ class AccountDailyBalance(models.Model):
                 ('state', '=', 'posted')
             ])
             for bill in vendor_bills:
+                payments = bill._get_reconciled_payments()
+                payment = payments[0] if payments else False
+
+                if not payment or payment.journal_id.type != "cash":
+                    continue
+
                 self.env['account.daily.balance.line'].create({
                     'balance_id': record.id,
                     'reference': bill.name,
                     'libelle': bill.journal_label,
+                    'payment': "cash",
                     'debit': bill.amount_total,
                     'credit': 0.0,
                 })
-            total_debit += sum(vendor_bills.mapped('amount_total'))
+            total_debit += sum([bill.amount_total for bill in vendor_bills if bill._get_reconciled_payments() and bill._get_reconciled_payments()[0].journal_id.type == "cash"])
 
-            # Dépenses RH (debit)
+            # Dépenses RH
             hr_expenses = self.env['hr.expense'].search([
                 ('state', '=', 'done'),
                 ('date', '=', record.date)
@@ -131,12 +145,12 @@ class AccountDailyBalance(models.Model):
                     'balance_id': record.id,
                     'reference': exp.name,
                     'libelle': 'Dépense RH',
+                    'payment': '',
                     'debit': exp.total_amount,
                     'credit': 0.0,
                 })
             total_debit += sum(hr_expenses.mapped('total_amount'))
 
-            # Calcul final
             nouveau_solde = record.ancien_solde + (total_credit - total_debit)
 
             record.write({
@@ -154,6 +168,7 @@ class AccountDailyBalanceLine(models.Model):
     balance_id = fields.Many2one('account.daily.balance', string='Balance', ondelete='cascade')
     reference = fields.Char(string='Référence')
     libelle = fields.Char(string='Libellé')
+    payment = fields.Char(string='PAYMENT')
     debit = fields.Float(string='Débit')
     credit = fields.Float(string='Crédit')
 
@@ -172,3 +187,13 @@ class AccountDailyBalanceInitWizard(models.TransientModel):
         self.balance_id.ancien_solde = self.initial_balance
         self.balance_id.action_update_totals()
         return {'type': 'ir.actions.act_window_close'}
+
+
+class AccountPaymentRegister(models.TransientModel):
+    _inherit = 'account.payment.register'
+
+    journal_type = fields.Char(string="Journal Type", readonly=True)
+
+    @api.onchange('journal_id')
+    def _onchange_journal_type(self):
+        self.journal_type = self.journal_id.type if self.journal_id else ""
