@@ -11,7 +11,7 @@ class AccountDailyBalance(models.Model):
     date = fields.Date(string='Date', required=True, default=fields.Date.context_today)
     total_debit = fields.Float(string='Total Débit', readonly=True)
     total_credit = fields.Float(string='Total Crédit', readonly=True)
-    ancien_solde = fields.Float(string='Ancien solde')
+    ancien_solde = fields.Float(string='Ancien solde', readonly=True)
     nouveau_solde = fields.Float(string='Nouveau solde', readonly=True)
     show_lines = fields.Boolean(string='Afficher les lignes', default=False)
 
@@ -21,40 +21,29 @@ class AccountDailyBalance(models.Model):
         ('unique_date', 'unique(date)', 'Une seule ligne est autorisée par jour.')
     ]
 
-    # -------------------------------------------------------------------------
-    # Vérifie à l'ouverture du formulaire (bouton "Nouveau")
-    # Si un bilan du jour existe déjà → empêche la création
-    # -------------------------------------------------------------------------
     @api.model
     def default_get(self, fields_list):
         today = fields.Date.context_today(self)
         last_balance = self.search([], order="date desc", limit=1)
 
-        # 🔒 Empêche la création si un enregistrement du jour existe déjà
         if last_balance and last_balance.date == today:
             raise UserError(_(
-                "⚠️ L’exercice du jour a déjà été créé.\n"
+                "⚠L’exercice du jour a déjà été créé.\n"
                 "Veuillez ouvrir l’enregistrement du jour dans la liste existante."
             ))
 
-        # 🟢 Sinon, comportement normal (création autorisée)
         return super(AccountDailyBalance, self).default_get(fields_list)
 
-    # -------------------------------------------------------------------------
-    # Détermine automatiquement l'ancien solde au moment de la création
-    # -------------------------------------------------------------------------
     @api.model
     def create(self, vals):
-        """Ajout de la vérification : si un bilan du jour existe déjà, bloquer."""
         today = fields.Date.context_today(self)
         last_balance = self.search([], order="date desc", limit=1)
         if last_balance and last_balance.date == today:
             raise UserError(_(
-                "⚠️ L’exercice du jour a déjà été créé.\n"
+                "L’exercice du jour a déjà été créé.\n"
                 "Veuillez ouvrir l’enregistrement du jour dans la liste existante."
             ))
 
-        # --- Code d’origine inchangé ci-dessous ---
         date_record = vals.get('date')
         if date_record:
             if isinstance(date_record, str):
@@ -65,33 +54,25 @@ class AccountDailyBalance(models.Model):
             if previous_balance and previous_balance.nouveau_solde:
                 vals['ancien_solde'] = previous_balance.nouveau_solde
             else:
-                # Premier jour → solde à saisir via wizard
                 vals['ancien_solde'] = 0.0
+
         return super().create(vals)
 
-    # -------------------------------------------------------------------------
-    # Bouton : Mettre à jour les totaux
-    # -------------------------------------------------------------------------
     def action_update_totals(self):
         for record in self:
             today = fields.Date.context_today(self)
 
-            # 🚫 Empêche la mise à jour pour une date future
-            if record.date > today:
-                raise UserError(_("Veuillez sélectionner la date du jour avant de mettre à jour les totaux."))
-
-            # 🔒 Empêche la modification des jours passés
             if record.date < today:
                 raise UserError(_("Impossible de recalculer une journée passée."))
+            if record.date > today:
+                raise UserError(_("Veuillez sélectionner la date du jour pour effectuer le calcul."))
 
-            # 🔁 Recherche du solde précédent
             previous_day = record.date - timedelta(days=1)
             previous_balance = self.search([('date', '=', previous_day)], limit=1)
 
             if previous_balance and previous_balance.nouveau_solde:
                 record.ancien_solde = previous_balance.nouveau_solde
             elif not record.ancien_solde or record.ancien_solde == 0:
-                # 🔔 Ouvre le wizard si aucun solde précédent
                 return {
                     'type': 'ir.actions.act_window',
                     'name': _('Saisir le solde initial'),
@@ -101,13 +82,12 @@ class AccountDailyBalance(models.Model):
                     'context': {'default_balance_id': record.id},
                 }
 
-            # 🔄 Efface les anciennes lignes avant recalcul
             record.line_ids.unlink()
 
             total_credit = 0
             total_debit = 0
 
-            # ✅ Factures clients payées
+            # Factures clients (credit)
             client_invoices = self.env['account.move'].search([
                 ('move_type', '=', 'out_invoice'),
                 ('payment_state', '=', 'paid'),
@@ -118,13 +98,13 @@ class AccountDailyBalance(models.Model):
                 self.env['account.daily.balance.line'].create({
                     'balance_id': record.id,
                     'reference': inv.name,
-                    'libelle': inv.invoice_origin or inv.ref or 'Facture client',
-                    'debit': inv.amount_total,
-                    'credit': 0.0,
+                    'libelle': inv.journal_label,
+                    'debit': 0.0,
+                    'credit': inv.amount_total,
                 })
             total_credit += sum(client_invoices.mapped('amount_total'))
 
-            # ✅ Factures fournisseurs payées
+            # Factures fournisseurs (debit)
             vendor_bills = self.env['account.move'].search([
                 ('move_type', '=', 'in_invoice'),
                 ('payment_state', '=', 'paid'),
@@ -135,13 +115,13 @@ class AccountDailyBalance(models.Model):
                 self.env['account.daily.balance.line'].create({
                     'balance_id': record.id,
                     'reference': bill.name,
-                    'libelle': bill.ref or 'Facture fournisseur',
-                    'debit': 0.0,
-                    'credit': bill.amount_total,
+                    'libelle': bill.journal_label,
+                    'debit': bill.amount_total,
+                    'credit': 0.0,
                 })
             total_debit += sum(vendor_bills.mapped('amount_total'))
 
-            # ✅ Dépenses RH validées
+            # Dépenses RH (debit)
             hr_expenses = self.env['hr.expense'].search([
                 ('state', '=', 'done'),
                 ('date', '=', record.date)
@@ -151,12 +131,12 @@ class AccountDailyBalance(models.Model):
                     'balance_id': record.id,
                     'reference': exp.name,
                     'libelle': 'Dépense RH',
-                    'debit': 0.0,
-                    'credit': exp.total_amount,
+                    'debit': exp.total_amount,
+                    'credit': 0.0,
                 })
             total_debit += sum(hr_expenses.mapped('total_amount'))
 
-            # ✅ Calcul du nouveau solde
+            # Calcul final
             nouveau_solde = record.ancien_solde + (total_credit - total_debit)
 
             record.write({
@@ -167,9 +147,6 @@ class AccountDailyBalance(models.Model):
             })
 
 
-# -------------------------------------------------------------------------
-# Lignes de détail
-# -------------------------------------------------------------------------
 class AccountDailyBalanceLine(models.Model):
     _name = 'account.daily.balance.line'
     _description = 'Ligne du rapport journalier Débit/Crédit'
@@ -181,9 +158,6 @@ class AccountDailyBalanceLine(models.Model):
     credit = fields.Float(string='Crédit')
 
 
-# -------------------------------------------------------------------------
-# Wizard pour initialiser le solde de départ
-# -------------------------------------------------------------------------
 class AccountDailyBalanceInitWizard(models.TransientModel):
     _name = 'account.daily.balance.init.wizard'
     _description = 'Wizard pour initialiser le solde'
@@ -192,7 +166,6 @@ class AccountDailyBalanceInitWizard(models.TransientModel):
     initial_balance = fields.Float(string='Solde initial', required=True)
 
     def action_confirm(self):
-        """Valide le solde initial et relance le calcul"""
         if not self.balance_id:
             raise UserError(_("Aucune balance liée au wizard."))
 

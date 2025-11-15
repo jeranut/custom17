@@ -7,7 +7,9 @@
     'depends': ['account', 'hr_expense', 'web'],  # ✅ Ajout de 'web' car tu utilises des assets JS
     'data': [
         'security/ir.model.access.csv',
-        'views/paid_totals_views.xml',  # ✅ Retiré paid_totals_assets.xml (plus utilisé)
+        'views/paid_totals_views.xml',
+        'views/journal_libel.xml',
+        'views/invoice_date_read_only.xml',
     ],
     'assets': {
         'web.assets_backend': [
