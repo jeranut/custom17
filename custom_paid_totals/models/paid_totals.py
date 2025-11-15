@@ -197,3 +197,22 @@ class AccountPaymentRegister(models.TransientModel):
     @api.onchange('journal_id')
     def _onchange_journal_type(self):
         self.journal_type = self.journal_id.type if self.journal_id else ""
+
+    def action_create_payments(self):
+        # Appel du traitement normal pour créer le paiement
+        payments = super(AccountPaymentRegister, self).action_create_payments()
+
+        # Vérifier si le paiement est Cash
+        if self.journal_id.type == "cash":
+            # Récupérer la balance du jour
+            today = fields.Date.context_today(self.env['account.daily.balance'])
+            balance = self.env['account.daily.balance'].search([('date', '=', today)], limit=1)
+
+            # Si aucune balance de la journée n'existe -> en créer une
+            if not balance:
+                balance = self.env['account.daily.balance'].create({'date': today})
+
+            # Appeler automatiquement la mise à jour
+            balance.action_update_totals()
+
+        return payments
