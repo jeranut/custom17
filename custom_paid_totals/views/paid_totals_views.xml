@@ -1,19 +1,4 @@
 <odoo>
-    <!-- Vue liste -->
-    <record id="view_account_daily_balance_tree" model="ir.ui.view">
-        <field name="name">account.daily.balance.tree</field>
-        <field name="model">account.daily.balance</field>
-        <field name="arch" type="xml">
-            <tree>
-                <field name="date"/>
-                <field name="ancien_solde"/>
-                <field name="total_debit"/>
-                <field name="total_credit"/>
-                <field name="nouveau_solde"/>
-            </tree>
-        </field>
-    </record>
-
     <!-- Vue formulaire -->
     <record id="view_account_daily_balance_form" model="ir.ui.view">
         <field name="name">account.daily.balance.form</field>
@@ -33,21 +18,21 @@
                     </group>
 
                     <group>
-                        <field name="ancien_solde"/>
+                        <!-- 🔒 Champ ancien_solde rendu non modifiable -->
+                        <field name="ancien_solde" readonly="1"/>
                         <field name="total_debit" readonly="1"/>
                         <field name="total_credit" readonly="1"/>
                         <field name="nouveau_solde" readonly="1"/>
                     </group>
 
-                    <!-- Champ de contrôle invisible -->
+                    <!-- ⚙️ Champ logique invisible pour le contrôle -->
                     <field name="show_lines" invisible="1"/>
 
                     <separator string="Détails du jour"/>
 
-                    <!-- Lignes visibles seulement après clic -->
-                    <field name="line_ids" nolabel="1"
-                           modifiers="{'invisible': [('show_lines', '=', False)]}">
-                        <tree editable="false">
+                    <!-- ✅ Vue verrouillée : aucune suppression ni ajout manuel -->
+                    <field name="line_ids" nolabel="1" modifiers='{"invisible": [["show_lines", "=", false]]}'>
+                        <tree editable="false" create="false" delete="false">
                             <field name="reference"/>
                             <field name="libelle"/>
                             <field name="debit"/>
@@ -55,6 +40,43 @@
                         </tree>
                     </field>
                 </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Vue liste -->
+    <record id="view_account_daily_balance_tree" model="ir.ui.view">
+        <field name="name">account.daily.balance.tree</field>
+        <field name="model">account.daily.balance</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="date"/>
+                <field name="ancien_solde"/>
+                <field name="total_debit"/>
+                <field name="total_credit"/>
+                <field name="nouveau_solde"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Vue du wizard -->
+    <record id="view_account_daily_balance_init_wizard" model="ir.ui.view">
+        <field name="name">account.daily.balance.init.wizard.form</field>
+        <field name="model">account.daily.balance.init.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Saisir le solde initial">
+                <group>
+                    <field name="initial_balance"/>
+                </group>
+                <footer>
+                    <button name="action_confirm"
+                            type="object"
+                            string="Valider"
+                            class="btn-primary"/>
+                    <button string="Annuler"
+                            special="cancel"
+                            class="btn-secondary"/>
+                </footer>
             </form>
         </field>
     </record>
@@ -70,7 +92,6 @@
     <menuitem id="menu_paid_totals_main"
               name="Rapports Financiers"
               sequence="50"/>
-
     <menuitem id="menu_paid_totals_list"
               name="Totaux Journaliers"
               parent="menu_paid_totals_main"

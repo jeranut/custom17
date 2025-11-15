@@ -1,6 +1,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
-from datetime import timedelta, date
+from datetime import timedelta
+
 
 class AccountDailyBalance(models.Model):
     _name = 'account.daily.balance'
@@ -20,12 +21,42 @@ class AccountDailyBalance(models.Model):
         ('unique_date', 'unique(date)', 'Une seule ligne est autorisée par jour.')
     ]
 
+    # -------------------------------------------------------------------------
+    # Vérifie à l'ouverture du formulaire (bouton "Nouveau")
+    # Si un bilan du jour existe déjà → empêche la création
+    # -------------------------------------------------------------------------
+    @api.model
+    def default_get(self, fields_list):
+        today = fields.Date.context_today(self)
+        last_balance = self.search([], order="date desc", limit=1)
+
+        # 🔒 Empêche la création si un enregistrement du jour existe déjà
+        if last_balance and last_balance.date == today:
+            raise UserError(_(
+                "⚠️ L’exercice du jour a déjà été créé.\n"
+                "Veuillez ouvrir l’enregistrement du jour dans la liste existante."
+            ))
+
+        # 🟢 Sinon, comportement normal (création autorisée)
+        return super(AccountDailyBalance, self).default_get(fields_list)
+
+    # -------------------------------------------------------------------------
+    # Détermine automatiquement l'ancien solde au moment de la création
+    # -------------------------------------------------------------------------
     @api.model
     def create(self, vals):
-        """Détermination automatique de l'ancien solde au moment de la création"""
+        """Ajout de la vérification : si un bilan du jour existe déjà, bloquer."""
+        today = fields.Date.context_today(self)
+        last_balance = self.search([], order="date desc", limit=1)
+        if last_balance and last_balance.date == today:
+            raise UserError(_(
+                "⚠️ L’exercice du jour a déjà été créé.\n"
+                "Veuillez ouvrir l’enregistrement du jour dans la liste existante."
+            ))
+
+        # --- Code d’origine inchangé ci-dessous ---
         date_record = vals.get('date')
         if date_record:
-            # convertir str en date si nécessaire
             if isinstance(date_record, str):
                 date_record = fields.Date.from_string(date_record)
             previous_day = date_record - timedelta(days=1)
@@ -34,30 +65,43 @@ class AccountDailyBalance(models.Model):
             if previous_balance and previous_balance.nouveau_solde:
                 vals['ancien_solde'] = previous_balance.nouveau_solde
             else:
-                # aucun solde précédent → popup à saisir manuellement
+                # Premier jour → solde à saisir via wizard
                 vals['ancien_solde'] = 0.0
-        return super(AccountDailyBalance, self).create(vals)
+        return super().create(vals)
 
+    # -------------------------------------------------------------------------
+    # Bouton : Mettre à jour les totaux
+    # -------------------------------------------------------------------------
     def action_update_totals(self):
         for record in self:
             today = fields.Date.context_today(self)
 
-            # Si la date sélectionnée < aujourd’hui, on bloque la mise à jour
-            if record.date < today:
-                raise UserError(_("Impossible de recalculer une journée passée. Les anciens soldes sont figés."))
+            # 🚫 Empêche la mise à jour pour une date future
+            if record.date > today:
+                raise UserError(_("Veuillez sélectionner la date du jour avant de mettre à jour les totaux."))
 
-            # Récupération du solde du jour précédent
+            # 🔒 Empêche la modification des jours passés
+            if record.date < today:
+                raise UserError(_("Impossible de recalculer une journée passée."))
+
+            # 🔁 Recherche du solde précédent
             previous_day = record.date - timedelta(days=1)
             previous_balance = self.search([('date', '=', previous_day)], limit=1)
+
             if previous_balance and previous_balance.nouveau_solde:
                 record.ancien_solde = previous_balance.nouveau_solde
-            elif not record.ancien_solde:
-                # si ancien_solde encore vide → popup manuel
-                raise UserError(_(
-                    "Aucun solde précédent trouvé.\nVeuillez entrer manuellement le solde de départ dans le champ 'Ancien solde'."
-                ))
+            elif not record.ancien_solde or record.ancien_solde == 0:
+                # 🔔 Ouvre le wizard si aucun solde précédent
+                return {
+                    'type': 'ir.actions.act_window',
+                    'name': _('Saisir le solde initial'),
+                    'res_model': 'account.daily.balance.init.wizard',
+                    'view_mode': 'form',
+                    'target': 'new',
+                    'context': {'default_balance_id': record.id},
+                }
 
-            # Efface les anciennes lignes
+            # 🔄 Efface les anciennes lignes avant recalcul
             record.line_ids.unlink()
 
             total_credit = 0
@@ -119,10 +163,13 @@ class AccountDailyBalance(models.Model):
                 'total_debit': total_debit,
                 'total_credit': total_credit,
                 'nouveau_solde': nouveau_solde,
-                'show_lines': True,  # affiche le tree après clic
+                'show_lines': True,
             })
 
 
+# -------------------------------------------------------------------------
+# Lignes de détail
+# -------------------------------------------------------------------------
 class AccountDailyBalanceLine(models.Model):
     _name = 'account.daily.balance.line'
     _description = 'Ligne du rapport journalier Débit/Crédit'
@@ -132,3 +179,23 @@ class AccountDailyBalanceLine(models.Model):
     libelle = fields.Char(string='Libellé')
     debit = fields.Float(string='Débit')
     credit = fields.Float(string='Crédit')
+
+
+# -------------------------------------------------------------------------
+# Wizard pour initialiser le solde de départ
+# -------------------------------------------------------------------------
+class AccountDailyBalanceInitWizard(models.TransientModel):
+    _name = 'account.daily.balance.init.wizard'
+    _description = 'Wizard pour initialiser le solde'
+
+    balance_id = fields.Many2one('account.daily.balance', string='Balance liée')
+    initial_balance = fields.Float(string='Solde initial', required=True)
+
+    def action_confirm(self):
+        """Valide le solde initial et relance le calcul"""
+        if not self.balance_id:
+            raise UserError(_("Aucune balance liée au wizard."))
+
+        self.balance_id.ancien_solde = self.initial_balance
+        self.balance_id.action_update_totals()
+        return {'type': 'ir.actions.act_window_close'}
