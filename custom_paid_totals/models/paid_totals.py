@@ -8,7 +8,7 @@ class AccountDailyBalance(models.Model):
     _description = 'Rapport journalier Débit/Crédit'
     _rec_name = 'date'
 
-    date = fields.Date(string='Date', required=True, default=fields.Date.context_today)
+    date = fields.Date(string='Date', required=True, default=fields.Date.context_today, readonly=True)
     total_debit = fields.Float(string='Total Débit', readonly=True)
     total_credit = fields.Float(string='Total Crédit', readonly=True)
     ancien_solde = fields.Float(string='Ancien solde', readonly=True)
@@ -82,8 +82,6 @@ class AccountDailyBalance(models.Model):
                     'context': {'default_balance_id': record.id},
                 }
 
-            record.line_ids.filtered(lambda l: not l.reference.startswith("REC/")).unlink()
-
             total_credit = 0
             total_debit = 0
 
@@ -101,14 +99,28 @@ class AccountDailyBalance(models.Model):
                 if not payment or payment.journal_id.type != "cash":
                     continue
 
-                self.env['account.daily.balance.line'].create({
-                    'balance_id': record.id,
-                    'reference': inv.name,
-                    'libelle': inv.journal_label,
-                    'payment': "cash",
-                    'debit': 0.0,
-                    'credit': inv.amount_total,
-                })
+                existing = self.env['account.daily.balance.line'].search([
+                    ('balance_id', '=', record.id),
+                    ('reference', '=', inv.name)
+                ], limit=1)
+
+                if existing:
+                    existing.write({
+                        'libelle': inv.journal_label,
+                        'payment': "cash",
+                        'debit': 0.0,
+                        'credit': inv.amount_total,
+                    })
+                else:
+                    self.env['account.daily.balance.line'].create({
+                        'balance_id': record.id,
+                        'reference': inv.name,
+                        'libelle': inv.journal_label,
+                        'payment': "cash",
+                        'debit': 0.0,
+                        'credit': inv.amount_total,
+                    })
+
             total_credit += sum([inv.amount_total for inv in client_invoices if
                                  inv._get_reconciled_payments() and inv._get_reconciled_payments()[
                                      0].journal_id.type == "cash"])
@@ -127,14 +139,28 @@ class AccountDailyBalance(models.Model):
                 if not payment or payment.journal_id.type != "cash":
                     continue
 
-                self.env['account.daily.balance.line'].create({
-                    'balance_id': record.id,
-                    'reference': bill.name,
-                    'libelle': bill.journal_label,
-                    'payment': "cash",
-                    'debit': bill.amount_total,
-                    'credit': 0.0,
-                })
+                existing = self.env['account.daily.balance.line'].search([
+                    ('balance_id', '=', record.id),
+                    ('reference', '=', bill.name)
+                ], limit=1)
+
+                if existing:
+                    existing.write({
+                        'libelle': bill.journal_label,
+                        'payment': "cash",
+                        'debit': bill.amount_total,
+                        'credit': 0.0,
+                    })
+                else:
+                    self.env['account.daily.balance.line'].create({
+                        'balance_id': record.id,
+                        'reference': bill.name,
+                        'libelle': bill.journal_label,
+                        'payment': "cash",
+                        'debit': bill.amount_total,
+                        'credit': 0.0,
+                    })
+
             total_debit += sum([bill.amount_total for bill in vendor_bills if
                                 bill._get_reconciled_payments() and bill._get_reconciled_payments()[
                                     0].journal_id.type == "cash"])
@@ -145,17 +171,31 @@ class AccountDailyBalance(models.Model):
                 ('date', '=', record.date)
             ])
             for exp in hr_expenses:
-                self.env['account.daily.balance.line'].create({
-                    'balance_id': record.id,
-                    'reference': exp.name,
-                    'libelle': 'Dépense RH',
-                    'payment': '',
-                    'debit': exp.total_amount,
-                    'credit': 0.0,
-                })
+                existing = self.env['account.daily.balance.line'].search([
+                    ('balance_id', '=', record.id),
+                    ('reference', '=', exp.name)
+                ], limit=1)
+
+                if existing:
+                    existing.write({
+                        'libelle': 'Dépense RH',
+                        'payment': '',
+                        'debit': exp.total_amount,
+                        'credit': 0.0,
+                    })
+                else:
+                    self.env['account.daily.balance.line'].create({
+                        'balance_id': record.id,
+                        'reference': exp.name,
+                        'libelle': 'Dépense RH',
+                        'payment': '',
+                        'debit': exp.total_amount,
+                        'credit': 0.0,
+                    })
+
             total_debit += sum(hr_expenses.mapped('total_amount'))
 
-            # Crecalcul des totaux
+            # recalcul des totaux
             total_credit = sum(record.line_ids.mapped('credit'))
             total_debit = sum(record.line_ids.mapped('debit'))
 
@@ -168,9 +208,6 @@ class AccountDailyBalance(models.Model):
                 'show_lines': True,
             })
 
-    # ------------------------------------------------------
-    # 🔹 Wizard Totaux
-    # ------------------------------------------------------
     def action_update_totals_wizard(self):
         return {
             'type': 'ir.actions.act_window',
@@ -232,6 +269,8 @@ class UpdateTotalsWizard(models.TransientModel):
 class AccountDailyBalanceLine(models.Model):
     _name = 'account.daily.balance.line'
     _description = 'Ligne du rapport journalier Débit/Crédit'
+    _order = 'id asc'
+    _rec_name = 'reference'
 
     balance_id = fields.Many2one('account.daily.balance', string='Balance', ondelete='cascade')
     reference = fields.Char(string='REFERENCE FACTURE')
@@ -239,6 +278,28 @@ class AccountDailyBalanceLine(models.Model):
     payment = fields.Char(string='PAYMENT')
     debit = fields.Float(string='DEBIT')
     credit = fields.Float(string='CREDIT')
+    regule_badge = fields.Char(string="Badge", compute="_compute_regule_badge", store=True)
+    origin_line_id = fields.Many2one(
+        'account.daily.balance.line',
+        string="Ligne d'origine",
+        readonly=True
+    )
+
+    @api.depends('balance_id.line_ids.origin_line_id', 'balance_id.line_ids.libelle')
+    def _compute_regule_badge(self):
+        for line in self:
+            # S'il s'agit d'une ligne REGULE elle-même → pas de badge
+            if line.libelle == 'REGULE':
+                line.regule_badge = ''
+                continue
+
+            # Compter les régules liées à cette ligne
+            regulated = self.env['account.daily.balance.line'].search_count([
+                ('origin_line_id', '=', line.id),
+                ('libelle', '=', 'REGULE')
+            ])
+
+            line.regule_badge = "REGULE" if regulated >= 1 else ""
 
 
 class AccountDailyBalanceInitWizard(models.TransientModel):
@@ -287,7 +348,6 @@ class HrExpenseSheet(models.Model):
     def action_sheet_move_create(self):
         res = super(HrExpenseSheet, self).action_sheet_move_create()
 
-        # Quand la dépense est réellement comptabilisée
         for sheet in self:
             today = fields.Date.context_today(self.env['account.daily.balance'])
             balance = self.env['account.daily.balance'].search([('date', '=', today)], limit=1)
@@ -299,3 +359,117 @@ class HrExpenseSheet(models.Model):
 
         return res
 
+
+# ------------------------------------------------------
+# 🔹 Wizard Régulation
+# ------------------------------------------------------
+class ReguleWizard(models.TransientModel):
+    _name = 'regule.wizard'
+    _description = "Wizard Regule"
+
+    balance_id = fields.Many2one('account.daily.balance', string="Balance", required=True)
+
+    reference_id = fields.Many2one(
+        'account.daily.balance.line',
+        string="Référence",
+        required=True
+    )
+
+    montant = fields.Float(string="Montant", readonly=True, store=True)
+
+    # ───────────────────────────────────────────────
+    # Filtrer référence pour n'afficher que non régulés
+    # ───────────────────────────────────────────────
+    @api.onchange('balance_id')
+    def _onchange_balance_id(self):
+        if not self.balance_id:
+            return {}
+
+        # References déjà régulées
+        reguled_refs = self.balance_id.line_ids.filtered(
+            lambda l: l.libelle == 'REGULE'
+        ).mapped('reference')
+
+        return {
+            'domain': {
+                'reference_id': [
+                    ('balance_id', '=', self.balance_id.id),
+                    ('libelle', '!=', 'REGULE'),
+                    ('reference', 'not in', reguled_refs)
+                ]
+            }
+        }
+
+    # Remplissage automatique du montant
+    @api.onchange('reference_id')
+    def _onchange_reference_id(self):
+        if self.reference_id:
+            self.montant = abs(self.reference_id.debit or self.reference_id.credit or 0)
+
+    # ───────────────────────────────────────────────
+    # CONFIRMATION REGULE
+    # ───────────────────────────────────────────────
+    from odoo import fields, _
+    from odoo.exceptions import UserError
+
+    def action_confirm_regule(self):
+        self.ensure_one()
+
+        # Interdire régulation de REGULE
+        if self.reference_id.libelle == 'REGULE':
+            raise UserError(_("Impossible de réguler une ligne REGULE."))
+
+        # Interdire régule d'un jour passé
+        today = fields.Date.context_today(self)
+        if self.balance_id.date < today:
+            raise UserError(_("Journal déjà clôturé, régulation impossible."))
+
+        # Compter toutes les régules liées à cette référence
+        regule_count = self.env['account.daily.balance.line'].search_count([
+            ('balance_id', '=', self.balance_id.id),
+            ('reference', '=', self.reference_id.reference),
+            ('libelle', '=', 'REGULE')
+        ])
+
+        if regule_count >= 1:
+            raise UserError(_("Cette référence a déjà été régulée, opération impossible."))
+
+        montant = abs(self.reference_id.debit or self.reference_id.credit or 0)
+
+        # Déterminer direction mouvement
+        if self.reference_id.credit > 0:
+            debit = montant
+            credit = 0.0
+        else:
+            debit = 0.0
+            credit = montant
+
+        # Création ligne REGULE (une seule)
+        self.env['account.daily.balance.line'].create({
+            'balance_id': self.balance_id.id,
+            'reference': self.reference_id.reference,
+            'libelle': 'REGULE',
+            'payment': self.reference_id.payment,
+            'debit': debit,
+            'credit': credit,
+            'origin_line_id': self.reference_id.id,
+        })
+
+        # Annulation facture ou paiement ou dépense
+        invoice = self.env['account.move'].search([('name', '=', self.reference_id.reference)], limit=1)
+
+        if invoice and invoice.state not in ('cancel'):
+            invoice.button_cancel()
+        else:
+            payment = self.env['account.payment'].search([('name', '=', self.reference_id.reference)], limit=1)
+            if payment and payment.state != 'cancelled':
+                payment.action_cancel()
+
+            expense = self.env['hr.expense.sheet'].search([('name', '=', self.reference_id.reference)], limit=1)
+            if expense and expense.payment_state != 'reversed':
+                expense.write({'payment_state': 'reversed'})
+
+        # Mise à jour totaux balance
+        self.balance_id.action_update_totals()
+
+        return {'type': 'ir.actions.act_window_close'}

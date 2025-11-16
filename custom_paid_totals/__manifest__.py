@@ -11,11 +11,6 @@
         'views/journal_libel.xml',
         'views/invoice_date_read_only.xml',
     ],
-    'assets': {
-        'web.assets_backend': [
-            '/custom_paid_totals/static/src/js/paid_totals_date_filter.js',
-        ],
-    },
     'installable': True,
     'application': True,
 }

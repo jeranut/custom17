@@ -1,4 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <odoo>
+
+    <!-- Action REGULE (placée AVANT utilisation dans le form) -->
+    <record id="action_regule_wizard" model="ir.actions.act_window">
+        <field name="name">Wizard Régule</field>
+        <field name="res_model">regule.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
     <record id="view_account_daily_balance_form" model="ir.ui.view">
         <field name="name">account.daily.balance.form</field>
         <field name="model">account.daily.balance</field>
@@ -9,6 +19,16 @@
                             type="object"
                             string="AJOUT RECETTE DU JOUR"
                             class="btn-primary"/>
+                    <button name="action_update_totals"
+                            type="object"
+                            string="UPDATE"
+                            class="btn-primary"/>
+
+                    <button name="%(action_regule_wizard)d"
+                            type="action"
+                            string="REGULE"
+                            class="btn-danger oe_highlight"
+                            context="{'default_balance_id': active_id}"/>
                 </header>
 
                 <sheet>
@@ -27,15 +47,29 @@
 
                     <separator string="Détails du jour"/>
 
-                    <field name="line_ids" nolabel="1" modifiers='{"invisible": [["show_lines", "=", false]]}'>
-                        <tree editable="false" create="false" delete="false">
+                    <field name="line_ids"
+                           nolabel="1"
+                           domain="[('balance_id.date', '=', date)]"
+                           modifiers='{"invisible": [["show_lines", "=", false]]}'>
+
+                        <tree create="false" edit="false" delete="false" default_order="id asc"
+                              decoration-danger="libelle == 'REGULE'"> <!--  Ligne REGULE en rouge -->
+                            <!-- 🏷 Badge REGULÉ affiché en rouge -->
+                            <field name="regule_badge"
+                                   widget="badge"
+                                   string=""
+                                   decoration-danger="regule_badge == 'REGULE'"
+                                   width="50"/>
+
+                            <field name="id" string="ID" width="40"/>
                             <field name="reference"/>
                             <field name="libelle"/>
-                            <field name="payment"/> <!-- nouvelle colonne -->
+                            <field name="payment"/>
                             <field name="debit"/>
                             <field name="credit"/>
                         </tree>
                     </field>
+
                 </sheet>
             </form>
         </field>
@@ -79,10 +113,32 @@
         <field name="res_model">update.totals.wizard</field>
         <field name="view_mode">form</field>
         <field name="target">new</field>
+        <field name="context">{'default_balance_id': active_id}</field>
     </record>
 
+    <!-- View REGULE Wizard -->
+    <record id="view_regule_wizard_form" model="ir.ui.view">
+        <field name="name">regule.wizard.form</field>
+        <field name="model">regule.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Réguler la ligne">
+                <field name="balance_id" invisible="1"/>
+                <group>
+                    <field name="reference_id"
+                           string="Référence"
+                           domain="[('balance_id', '=', balance_id)]"
+                           options="{'no_create': True, 'no_create_edit': True}"/>
+                    <field name="montant" readonly="1"/>
+                </group>
+                <footer>
+                    <button string="Confirmer" type="object" name="action_confirm_regule" class="btn-primary"/>
+                    <button string="Annuler" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
 
-    <!-- Wizard -->
+    <!-- Initial balance wizard -->
     <record id="view_account_daily_balance_init_wizard" model="ir.ui.view">
         <field name="name">account.daily.balance.init.wizard.form</field>
         <field name="model">account.daily.balance.init.wizard</field>
@@ -100,7 +156,7 @@
     </record>
 
     <record id="action_paid_daily_total" model="ir.actions.act_window">
-        <field name="name">Journaux de trésorerie</field>
+        <field name="name">Journal Espèces</field>
         <field name="res_model">account.daily.balance</field>
         <field name="view_mode">tree,form</field>
     </record>
@@ -109,8 +165,9 @@
               name="Trésorerie"
               sequence="50"/>
     <menuitem id="menu_paid_totals_list"
-              name="Totaux Journaliers"
+              name="Journaux"
               parent="menu_paid_totals_main"
               action="action_paid_daily_total"
               sequence="1"/>
+
 </odoo>
