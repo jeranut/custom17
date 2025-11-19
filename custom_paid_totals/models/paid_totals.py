@@ -7,8 +7,15 @@ class AccountDailyBalance(models.Model):
     _name = 'account.daily.balance'
     _description = 'Rapport journalier Débit/Crédit'
     _rec_name = 'date'
+    _check_company_auto = True
 
     date = fields.Date(string='Date', required=True, default=fields.Date.context_today, readonly=True)
+    company_id = fields.Many2one(
+        'res.company',
+        string='Company',
+        required=True,
+        default=lambda self: self.env.company,
+    )
     total_debit = fields.Float(string='Total Débit', readonly=True)
     total_credit = fields.Float(string='Total Crédit', readonly=True)
     ancien_solde = fields.Float(string='Ancien solde', readonly=True)
@@ -18,13 +25,13 @@ class AccountDailyBalance(models.Model):
     line_ids = fields.One2many('account.daily.balance.line', 'balance_id', string='Détails')
 
     _sql_constraints = [
-        ('unique_date', 'unique(date)', 'Une seule ligne est autorisée par jour.')
+        ('unique_date_company', 'unique(date, company_id)', 'Une seule ligne est autorisée par jour et par société.')
     ]
 
     @api.model
     def default_get(self, fields_list):
         today = fields.Date.context_today(self)
-        last_balance = self.search([], order="date desc", limit=1)
+        last_balance = self.search([('company_id', '=', self.env.company.id)], order="date desc", limit=1)
 
         if last_balance and last_balance.date == today:
             raise UserError(_(
@@ -36,8 +43,13 @@ class AccountDailyBalance(models.Model):
 
     @api.model
     def create(self, vals):
+        # Prevent creation of duplicate daily record for the same company
         today = fields.Date.context_today(self)
-        last_balance = self.search([], order="date desc", limit=1)
+        # Determine company for this creation
+        company_id = vals.get('company_id') or self.env.company.id
+
+        last_balance = self.search([('company_id', '=', vals.get('company_id', self.env.company.id))],
+                                   order="date desc", limit=1)
         if last_balance and last_balance.date == today:
             raise UserError(_(
                 "L’exercice du jour a déjà été créé.\n"
@@ -49,12 +61,16 @@ class AccountDailyBalance(models.Model):
             if isinstance(date_record, str):
                 date_record = fields.Date.from_string(date_record)
             previous_day = date_record - timedelta(days=1)
-            previous_balance = self.search([('date', '=', previous_day)], limit=1)
+            previous_balance = self.search([('date', '=', previous_day), ('company_id', '=', company_id)], limit=1)
 
             if previous_balance and previous_balance.nouveau_solde:
                 vals['ancien_solde'] = previous_balance.nouveau_solde
             else:
                 vals['ancien_solde'] = 0.0
+
+        # Ensure company_id is set on create (if not provided)
+        if 'company_id' not in vals:
+            vals['company_id'] = company_id
 
         return super().create(vals)
 
@@ -68,7 +84,8 @@ class AccountDailyBalance(models.Model):
                 raise UserError(_("Veuillez sélectionner la date du jour pour effectuer le calcul."))
 
             previous_day = record.date - timedelta(days=1)
-            previous_balance = self.search([('date', '=', previous_day)], limit=1)
+            previous_balance = self.search([('date', '=', previous_day), ('company_id', '=', record.company_id.id)],
+                                           limit=1)
 
             if previous_balance and previous_balance.nouveau_solde:
                 record.ancien_solde = previous_balance.nouveau_solde
@@ -85,12 +102,13 @@ class AccountDailyBalance(models.Model):
             total_credit = 0
             total_debit = 0
 
-            # Factures clients CASH uniquement
+            # Factures clients CASH uniquement (filtrées par company)
             client_invoices = self.env['account.move'].search([
                 ('move_type', '=', 'out_invoice'),
                 ('payment_state', '=', 'paid'),
                 ('invoice_date', '=', record.date),
-                ('state', '=', 'posted')
+                ('state', '=', 'posted'),
+                ('company_id', '=', record.company_id.id),
             ])
             for inv in client_invoices:
                 payments = inv._get_reconciled_payments()
@@ -125,12 +143,13 @@ class AccountDailyBalance(models.Model):
                                  inv._get_reconciled_payments() and inv._get_reconciled_payments()[
                                      0].journal_id.type == "cash"])
 
-            # Factures fournisseurs CASH uniquement
+            # Factures fournisseurs CASH uniquement (filtrées par company)
             vendor_bills = self.env['account.move'].search([
                 ('move_type', '=', 'in_invoice'),
                 ('payment_state', '=', 'paid'),
                 ('invoice_date', '=', record.date),
-                ('state', '=', 'posted')
+                ('state', '=', 'posted'),
+                ('company_id', '=', record.company_id.id),
             ])
             for bill in vendor_bills:
                 payments = bill._get_reconciled_payments()
@@ -165,10 +184,11 @@ class AccountDailyBalance(models.Model):
                                 bill._get_reconciled_payments() and bill._get_reconciled_payments()[
                                     0].journal_id.type == "cash"])
 
-            # Dépenses RH
+            # Dépenses RH (filtrées par company)
             hr_expenses = self.env['hr.expense'].search([
                 ('state', '=', 'done'),
-                ('date', '=', record.date)
+                ('date', '=', record.date),
+                ('company_id', '=', record.company_id.id),
             ])
             for exp in hr_expenses:
                 existing = self.env['account.daily.balance.line'].search([
@@ -195,7 +215,7 @@ class AccountDailyBalance(models.Model):
 
             total_debit += sum(hr_expenses.mapped('total_amount'))
 
-            # recalcul des totaux
+            # recalcul des totaux (plus fiable : lire lignes de la balance courante)
             total_credit = sum(record.line_ids.mapped('credit'))
             total_debit = sum(record.line_ids.mapped('debit'))
 
@@ -238,8 +258,12 @@ class UpdateTotalsWizard(models.TransientModel):
         from datetime import datetime
         current_year = datetime.now().year
 
+        # Filtrer les références REC pour la même company que la balance
         last_line = self.env['account.daily.balance.line'].search(
-            [('reference', 'like', f"REC/{current_year}/%")],
+            [
+                ('reference', 'like', f"REC/{current_year}/%"),
+                ('company_id', '=', self.balance_id.company_id.id)
+            ],
             order="reference desc",
             limit=1
         )
@@ -284,6 +308,8 @@ class AccountDailyBalanceLine(models.Model):
         string="Ligne d'origine",
         readonly=True
     )
+    # company_id lié à la balance pour compatibilité multientreprise
+    company_id = fields.Many2one('res.company', related='balance_id.company_id', store=True, readonly=True)
 
     @api.depends('balance_id.line_ids.origin_line_id', 'balance_id.line_ids.libelle')
     def _compute_regule_badge(self):
@@ -296,7 +322,8 @@ class AccountDailyBalanceLine(models.Model):
             # Compter les régules liées à cette ligne
             regulated = self.env['account.daily.balance.line'].search_count([
                 ('origin_line_id', '=', line.id),
-                ('libelle', '=', 'REGULE')
+                ('libelle', '=', 'REGULE'),
+                ('company_id', '=', line.company_id.id),
             ])
 
             line.regule_badge = "REGULE" if regulated >= 1 else ""
@@ -330,14 +357,33 @@ class AccountPaymentRegister(models.TransientModel):
     def action_create_payments(self):
         payments = super(AccountPaymentRegister, self).action_create_payments()
 
+        today = fields.Date.context_today(self)
+
+        # CASH
         if self.journal_id.type == "cash":
-            today = fields.Date.context_today(self.env['account.daily.balance'])
-            balance = self.env['account.daily.balance'].search([('date', '=', today)], limit=1)
-
+            balance = self.env['account.daily.balance'].search([
+                ('date', '=', today),
+                ('company_id', '=', self.env.company.id),
+            ], limit=1)
             if not balance:
-                balance = self.env['account.daily.balance'].create({'date': today})
-
+                balance = self.env['account.daily.balance'].create({
+                    'date': today,
+                    'company_id': self.env.company.id
+                })
             balance.action_update_totals()
+
+        # MOBILE MONEY
+        if self.journal_id.type == "bank" and self.journal_id.name.lower() == "mobile money":
+            balance_mobile = self.env['account.daily.balance.mobile'].search([
+                ('date', '=', today),
+                ('company_id', '=', self.env.company.id),
+            ], limit=1)
+            if not balance_mobile:
+                balance_mobile = self.env['account.daily.balance.mobile'].create({
+                    'date': today,
+                    'company_id': self.env.company.id
+                })
+            balance_mobile.action_update_totals_mobile()
 
         return payments
 
@@ -349,11 +395,14 @@ class HrExpenseSheet(models.Model):
         res = super(HrExpenseSheet, self).action_sheet_move_create()
 
         for sheet in self:
-            today = fields.Date.context_today(self.env['account.daily.balance'])
-            balance = self.env['account.daily.balance'].search([('date', '=', today)], limit=1)
+            today = fields.Date.context_today(self)
+            balance = self.env['account.daily.balance'].search([
+                ('date', '=', today),
+                ('company_id', '=', self.env.company.id)
+            ], limit=1)
 
             if not balance:
-                balance = self.env['account.daily.balance'].create({'date': today})
+                balance = self.env['account.daily.balance'].create({'date': today, 'company_id': self.env.company.id})
 
             balance.action_update_totals()
 
@@ -368,14 +417,14 @@ class ReguleWizard(models.TransientModel):
     _description = "Wizard Regule"
 
     balance_id = fields.Many2one('account.daily.balance', string="Balance", required=True)
-
     reference_id = fields.Many2one(
         'account.daily.balance.line',
         string="Référence",
         required=True
     )
-
     montant = fields.Float(string="Montant", readonly=True, store=True)
+    company_id = fields.Many2one('res.company', string="Société",
+                                 related='balance_id.company_id', store=True, readonly=True)
 
     # ───────────────────────────────────────────────
     # Filtrer référence pour n'afficher que non régulés
@@ -394,6 +443,7 @@ class ReguleWizard(models.TransientModel):
             'domain': {
                 'reference_id': [
                     ('balance_id', '=', self.balance_id.id),
+                    ('company_id', '=', self.balance_id.company_id.id),
                     ('libelle', '!=', 'REGULE'),
                     ('reference', 'not in', reguled_refs)
                 ]
@@ -428,7 +478,8 @@ class ReguleWizard(models.TransientModel):
         regule_count = self.env['account.daily.balance.line'].search_count([
             ('balance_id', '=', self.balance_id.id),
             ('reference', '=', self.reference_id.reference),
-            ('libelle', '=', 'REGULE')
+            ('libelle', '=', 'REGULE'),
+            ('company_id', '=', self.balance_id.company_id.id),
         ])
 
         if regule_count >= 1:
@@ -456,16 +507,25 @@ class ReguleWizard(models.TransientModel):
         })
 
         # Annulation facture ou paiement ou dépense
-        invoice = self.env['account.move'].search([('name', '=', self.reference_id.reference)], limit=1)
+        invoice = self.env['account.move'].search([
+            ('name', '=', self.reference_id.reference),
+            ('company_id', '=', self.balance_id.company_id.id),
+        ], limit=1)
 
         if invoice and invoice.state not in ('cancel'):
             invoice.button_cancel()
         else:
-            payment = self.env['account.payment'].search([('name', '=', self.reference_id.reference)], limit=1)
+            payment = self.env['account.payment'].search([
+                ('name', '=', self.reference_id.reference),
+                ('company_id', '=', self.balance_id.company_id.id)
+            ], limit=1)
             if payment and payment.state != 'cancelled':
                 payment.action_cancel()
 
-            expense = self.env['hr.expense.sheet'].search([('name', '=', self.reference_id.reference)], limit=1)
+            expense = self.env['hr.expense.sheet'].search([
+                ('name', '=', self.reference_id.reference),
+                ('company_id', '=', self.balance_id.company_id.id)
+            ], limit=1)
             if expense and expense.payment_state != 'reversed':
                 expense.write({'payment_state': 'reversed'})
 

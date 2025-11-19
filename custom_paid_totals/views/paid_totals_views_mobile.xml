@@ -7,6 +7,7 @@
         <field name="arch" type="xml">
             <tree string="Totaux Mobile">
                 <field name="date"/>
+                <field name="company_id"/>
                 <field name="ancien_solde"/>
                 <field name="total_credit"/>
                 <field name="total_debit"/>
@@ -28,7 +29,7 @@
         <field name="arch" type="xml">
             <form string="Totaux Journaliers Mobile">
                 <header>
-                    <button name="action_update_totals_mobile" type="object" string="Mettre à jour les totaux"
+                    <button name="action_update_totals_mobile" type="object" string="UPDATE"
                             class="oe_highlight"/>
                     <button name="action_update_totals_wizard_mobile" type="object" string="DEPOT"
                             class="oe_highlight"/>
@@ -46,6 +47,7 @@
                 <sheet>
                     <group>
                         <field name="date"/>
+                        <field name="company_id" readonly="1"/>
                         <field name="ancien_solde"/>
                         <field name="total_credit"/>
                         <field name="total_debit"/>
@@ -54,7 +56,9 @@
 
                     <separator string="Détails du jour"/>
 
-                    <field name="line_ids" nolabel="1">
+                    <field name="line_ids"
+                           nolabel="1"
+                           domain="[('balance_id', '=', id), ('company_id', '=', company_id)]">
                         <tree create="false" edit="false" delete="false" default_order="id asc"
                               decoration-danger="libelle == 'REGULE'" options="{'no_open': True}">
                             <field name="regule_badge"
@@ -122,10 +126,11 @@
         <field name="model">regule.mobile.wizard</field>
         <field name="arch" type="xml">
             <form string="Réguler Mobile">
+                 <field name="balance_id" invisible="1"/>
+                 <field name="company_id" invisible="1"/>
                 <group>
-                    <field name="balance_id" invisible="1"/>
                     <field name="reference_id"
-                           domain="[('balance_id', '=', balance_id)]"
+                           domain="[('balance_id', '=', balance_id), ('company_id', '=', company_id)]"
                            options="{'no_create': True, 'no_create_edit': True}"/>
                     <field name="montant" readonly="1"/>
                 </group>
@@ -159,6 +164,7 @@
         <field name="name">Totaux Journaliers Mobile</field>
         <field name="res_model">account.daily.balance.mobile</field>
         <field name="view_mode">tree,form</field>
+        <field name="domain">[('company_id','in',context.get('allowed_company_ids', []))]</field>
     </record>
     <!-- JOURNAL MOBILE MONEY -->
     <menuitem id="menu_mobile_journal"

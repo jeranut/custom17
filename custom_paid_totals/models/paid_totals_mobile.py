@@ -62,7 +62,7 @@ class AccountDailyBalanceMobile(models.Model):
     line_ids = fields.One2many('account.daily.balance.mobile.line', 'balance_id', string='Détails')
 
     _sql_constraints = [
-        ('unique_date_mobile', 'unique(date)', 'Une seule ligne Mobile Money est autorisée par jour.')
+        ('unique_date_mobile', 'unique(date, company_id)', 'Une seule ligne Mobile Money par jour et par entreprise.')
     ]
 
     def action_open_retrait_wizard(self):
@@ -77,7 +77,8 @@ class AccountDailyBalanceMobile(models.Model):
     @api.model
     def default_get(self, fields_list):
         today = fields.Date.context_today(self)
-        last_balance = self.search([], order="date desc", limit=1)
+        last_balance = self.search([('company_id', '=', self.env.company.id)], order="date desc", limit=1)
+
         if last_balance and last_balance.date == today:
             raise UserError(_(
                 "Le journal Mobile Money du jour a déjà été créé.\n"
@@ -88,7 +89,8 @@ class AccountDailyBalanceMobile(models.Model):
     @api.model
     def create(self, vals):
         today = fields.Date.context_today(self)
-        last_balance = self.search([], order="date desc", limit=1)
+        last_balance = self.search([('company_id', '=', vals.get('company_id', self.env.company.id))],
+                                   order="date desc", limit=1)
         if last_balance and last_balance.date == today:
             raise UserError(_(
                 "Le journal Mobile Money du jour a déjà été créé.\n"
@@ -100,7 +102,11 @@ class AccountDailyBalanceMobile(models.Model):
             if isinstance(date_record, str):
                 date_record = fields.Date.from_string(date_record)
             previous_day = date_record - timedelta(days=1)
-            previous_balance = self.search([('date', '=', previous_day)], limit=1)
+            previous_balance = self.search([
+                ('date', '=', previous_day),
+                ('company_id', '=', vals.get('company_id', self.env.company.id))
+            ], limit=1)
+
             vals['ancien_solde'] = previous_balance.nouveau_solde if previous_balance else 0.0
         return super().create(vals)
 
@@ -113,7 +119,8 @@ class AccountDailyBalanceMobile(models.Model):
                 raise UserError(_("Veuillez sélectionner la date du jour pour effectuer le calcul."))
 
             previous_day = record.date - timedelta(days=1)
-            previous_balance = self.search([('date', '=', previous_day)], limit=1)
+            previous_balance = self.search([('date', '=', previous_day), ('company_id', '=', record.company_id.id), ],
+                                           limit=1)
 
             if previous_balance and previous_balance.nouveau_solde:
                 record.ancien_solde = previous_balance.nouveau_solde
@@ -134,6 +141,7 @@ class AccountDailyBalanceMobile(models.Model):
                 ('move_type', '=', 'out_invoice'),
                 ('payment_state', '=', 'paid'),
                 ('invoice_date', '=', record.date),
+                ('company_id', '=', record.company_id.id),
                 ('state', '=', 'posted')
             ])
 
@@ -150,6 +158,7 @@ class AccountDailyBalanceMobile(models.Model):
 
                 existing = self.env['account.daily.balance.mobile.line'].search([
                     ('balance_id', '=', record.id),
+                    ('company_id', '=', record.company_id.id),
                     ('reference', '=', inv.name)
                 ], limit=1)
 
@@ -174,6 +183,7 @@ class AccountDailyBalanceMobile(models.Model):
                 ('move_type', '=', 'in_invoice'),
                 ('payment_state', '=', 'paid'),
                 ('invoice_date', '=', record.date),
+                ('company_id', '=', record.company_id.id),
                 ('state', '=', 'posted')
             ])
 
@@ -190,6 +200,7 @@ class AccountDailyBalanceMobile(models.Model):
 
                 existing = self.env['account.daily.balance.mobile.line'].search([
                     ('balance_id', '=', record.id),
+                    ('company_id', '=', record.company_id.id),
                     ('reference', '=', bill.name)
                 ], limit=1)
 
@@ -202,30 +213,6 @@ class AccountDailyBalanceMobile(models.Model):
                     'credit': 0.0,
                 }
 
-                if existing:
-                    existing.write(vals)
-                else:
-                    self.env['account.daily.balance.mobile.line'].create(vals)
-
-            # Dépenses RH (hr.expense) ce jour : on les ajoute aussi
-            hr_expenses = self.env['hr.expense'].search([
-                ('state', '=', 'done'),
-                ('date', '=', record.date)
-            ])
-            for exp in hr_expenses:
-                existing = self.env['account.daily.balance.mobile.line'].search([
-                    ('balance_id', '=', record.id),
-                    ('reference', '=', exp.name)
-                ], limit=1)
-
-                vals = {
-                    'balance_id': record.id,
-                    'reference': exp.name,
-                    'libelle': 'Dépense RH',
-                    'payment': '',
-                    'debit': exp.total_amount,
-                    'credit': 0.0,
-                }
                 if existing:
                     existing.write(vals)
                 else:
@@ -286,11 +273,10 @@ class UpdateTotalsMobileWizard(models.TransientModel):
 
         current_year = datetime.now().year
 
-        last_line = self.env['account.daily.balance.mobile.line'].search(
-            [('reference', 'like', f"REC-MM/{current_year}/%")],
-            order="reference desc",
-            limit=1
-        )
+        last_line = self.env['account.daily.balance.mobile.line'].search([
+            ('reference', 'like', f"REC-MM/{current_year}/%"),
+            ('company_id', '=', self.balance_id.company_id.id),
+        ], order="reference desc", limit=1)
 
         if last_line:
             try:
@@ -340,6 +326,7 @@ class AccountDailyBalanceMobileLine(models.Model):
         default=lambda self: self.env.company.id,
         required=True
     )
+
     @api.depends('balance_id.line_ids.origin_line_id', 'balance_id.line_ids.libelle')
     def _compute_regule_badge(self):
         for line in self:
@@ -349,7 +336,8 @@ class AccountDailyBalanceMobileLine(models.Model):
 
             regulated = self.env['account.daily.balance.mobile.line'].search_count([
                 ('origin_line_id', '=', line.id),
-                ('libelle', '=', 'REGULE')
+                ('libelle', '=', 'REGULE'),
+                ('company_id', '=', line.company_id.id),
             ])
             line.regule_badge = "REGULE" if regulated >= 1 else ""
 
@@ -373,61 +361,6 @@ class AccountDailyBalanceMobileInitWizard(models.TransientModel):
 
 
 # -------------------------
-# Payment register override (pour mobile)
-# -------------------------
-class AccountPaymentRegisterMobile(models.TransientModel):
-    _inherit = 'account.payment.register'
-
-    journal_type = fields.Char(string="Journal Type", readonly=True)
-    journal_id = fields.Many2one(
-        'account.journal',
-        domain="[('type', 'in', ('bank','cash','mobile'))]"
-    )
-
-    @api.onchange('journal_id')
-    def _onchange_journal_type(self):
-        self.journal_type = self.journal_id.type if self.journal_id else ""
-
-    def action_create_payments(self):
-        payments = super(AccountPaymentRegisterMobile, self).action_create_payments()
-
-        # Si on paye via journal Mobile Money (type bank + nom Mobile Money)
-        if self.journal_id and self.journal_id.type == "bank" and self.journal_id.name == "Mobile Money":
-            today = fields.Date.context_today(self)
-
-            balance = self.env['account.daily.balance.mobile'].search([('date', '=', today)], limit=1)
-
-            if not balance:
-                balance = self.env['account.daily.balance.mobile'].create({'date': today})
-
-            balance.action_update_totals_mobile()
-
-        return payments
-
-        return payments
-
-
-# -------------------------
-# HR Expense override (pour mobile)
-# -------------------------
-class HrExpenseSheetMobile(models.Model):
-    _inherit = 'hr.expense.sheet'
-
-    def action_sheet_move_create(self):
-        res = super(HrExpenseSheetMobile, self).action_sheet_move_create()
-
-        for sheet in self:
-            # si la dépense est payée par mobile et date = today (ou autre logique), on met à jour
-            today = fields.Date.context_today(self.env['account.daily.balance.mobile'])
-            balance = self.env['account.daily.balance.mobile'].search([('date', '=', today)], limit=1)
-            if not balance:
-                balance = self.env['account.daily.balance.mobile'].create({'date': today})
-            balance.action_update_totals_mobile()
-
-        return res
-
-
-# -------------------------
 # Wizard Régule Mobile
 # -------------------------
 class ReguleMobileWizard(models.TransientModel):
@@ -437,6 +370,8 @@ class ReguleMobileWizard(models.TransientModel):
     balance_id = fields.Many2one('account.daily.balance.mobile', string="Balance", required=True)
     reference_id = fields.Many2one('account.daily.balance.mobile.line', string="Référence", required=True)
     montant = fields.Float(string="Montant", readonly=True, store=True)
+    company_id = fields.Many2one('res.company', string="Société",
+                                 related='balance_id.company_id', store=True, readonly=True)
 
     @api.onchange('balance_id')
     def _onchange_balance_id(self):
@@ -447,6 +382,7 @@ class ReguleMobileWizard(models.TransientModel):
             'domain': {
                 'reference_id': [
                     ('balance_id', '=', self.balance_id.id),
+                    ('company_id', '=', self.balance_id.company_id.id),
                     ('libelle', '!=', 'REGULE'),
                     ('reference', 'not in', reguled_refs)
                 ]
@@ -470,7 +406,8 @@ class ReguleMobileWizard(models.TransientModel):
         regule_count = self.env['account.daily.balance.mobile.line'].search_count([
             ('balance_id', '=', self.balance_id.id),
             ('reference', '=', self.reference_id.reference),
-            ('libelle', '=', 'REGULE')
+            ('libelle', '=', 'REGULE'),
+            ('company_id', '=', self.balance_id.company_id.id),
         ])
         if regule_count >= 1:
             raise UserError(_("Cette référence a déjà été régulée, opération impossible."))
@@ -495,21 +432,30 @@ class ReguleMobileWizard(models.TransientModel):
         })
 
         # Annulation facture/paiement/dépense si trouvée
-        invoice = self.env['account.move'].search([('name', '=', self.reference_id.reference)], limit=1)
+        invoice = self.env['account.move'].search([
+            ('name', '=', self.reference_id.reference),
+            ('company_id', '=', self.balance_id.company_id.id),
+        ], limit=1)
         if invoice and invoice.state not in ('cancel'):
             try:
                 invoice.button_cancel()
             except Exception:
                 pass
         else:
-            payment = self.env['account.payment'].search([('name', '=', self.reference_id.reference)], limit=1)
+            payment = self.env['account.payment'].search([
+                ('name', '=', self.reference_id.reference),
+                ('company_id', '=', self.balance_id.company_id.id),
+            ], limit=1)
             if payment and payment.state != 'cancelled':
                 try:
                     payment.action_cancel()
                 except Exception:
                     pass
 
-            expense = self.env['hr.expense.sheet'].search([('name', '=', self.reference_id.reference)], limit=1)
+            expense = self.env['hr.expense.sheet'].search([
+                ('name', '=', self.reference_id.reference),
+                ('company_id', '=', self.balance_id.company_id.id)
+            ], limit=1)
             if expense and expense.payment_state != 'reversed':
                 expense.write({'payment_state': 'reversed'})
 
@@ -525,13 +471,19 @@ class RetraitWizard(models.TransientModel):
     reference = fields.Char(string="Référence", readonly=True)
     motif = fields.Char(string="Motif", required=True)
     montant = fields.Float(string="Montant", required=True)
+    company_id = fields.Many2one(
+        'res.company',
+        string='Company',
+        required=True,
+        default=lambda self: self.env.company
+    )
 
     def _generate_reference(self):
         current_year = datetime.now().year
         prefix = f"RET/{current_year}/"
 
         last_line = self.env["account.daily.balance.mobile.line"].search(
-            [("reference", "like", prefix + "%")],
+            [("reference", "like", prefix + "%"), ("company_id", "=", self.env.company.id)],
             order="id desc",
             limit=1
         )
@@ -551,9 +503,11 @@ class RetraitWizard(models.TransientModel):
         return res
 
     def action_confirm_retrait(self):
-        balance_obj = self.env["account.daily.balance.mobile"].search(
-            [("date", "=", fields.Date.today())], limit=1
-        )
+        balance_obj = self.env["account.daily.balance.mobile"].search([
+            ('date', '=', fields.Date.today()),
+            ('company_id', '=', self.env.company.id),
+        ], limit=1)
+
         if not balance_obj:
             raise UserError("Aucun rapport mobile aujourd'hui.")
 

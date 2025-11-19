@@ -20,7 +20,10 @@ class AccountPaymentRegister(models.TransientModel):
         ):
             today = date.today()
 
-            balance = self.env['account.daily.balance.mobile'].search([('date', '=', today)], limit=1)
+            balance = self.env['account.daily.balance.mobile'].search([
+                ('date', '=', today),
+                ('company_id', '=', self.company_id.id),
+            ], limit=1)
             if not balance:
                 raise UserError(_("⚠ Aucun rapport Mobile Money n'existe pour aujourd'hui.\n"
                                   "Veuillez générer ou initialiser le solde de Mobile Money avant ce paiement."))

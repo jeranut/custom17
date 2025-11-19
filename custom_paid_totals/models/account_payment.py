@@ -15,7 +15,10 @@ class AccountPaymentRegister(models.TransientModel):
 
             today = date.today()
 
-            balance = self.env['account.daily.balance'].search([('date', '=', today)], limit=1)
+            balance = self.env['account.daily.balance'].search([
+                ('date', '=', today),
+                ('company_id', '=', self.company_id.id),
+            ], limit=1)
             if not balance:
                 raise UserError(_("⚠ Aucun rapport journalier n'existe pour aujourd'hui. "
                                   "Veuillez générer le rapport avant toute opération de paiement."))

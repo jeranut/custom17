@@ -6,6 +6,7 @@
     'author': 'Sysadptpro',
     'depends': ['account', 'hr_expense', 'web', 'point_of_sale'],
     'data': [
+        'security/groups.xml',
         'security/ir.model.access.csv',
         'views/paid_totals_views.xml',
         'views/paid_totals_views_mobile.xml',
