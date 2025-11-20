@@ -28,7 +28,7 @@ class AccountDailyBalance(models.Model):
 
         if last_balance and last_balance.date == today:
             raise UserError(_(
-                "⚠L’exercice du jour a déjà été créé.\n"
+                "L’exercice du jour a déjà été créé.\n"
                 "Veuillez ouvrir l’enregistrement du jour dans la liste existante."
             ))
 
@@ -82,7 +82,7 @@ class AccountDailyBalance(models.Model):
                     'context': {'default_balance_id': record.id},
                 }
 
-            record.line_ids.unlink()
+            record.line_ids.filtered(lambda l: not l.reference.startswith("REC/")).unlink()
 
             total_credit = 0
             total_debit = 0
@@ -109,7 +109,9 @@ class AccountDailyBalance(models.Model):
                     'debit': 0.0,
                     'credit': inv.amount_total,
                 })
-            total_credit += sum([inv.amount_total for inv in client_invoices if inv._get_reconciled_payments() and inv._get_reconciled_payments()[0].journal_id.type == "cash"])
+            total_credit += sum([inv.amount_total for inv in client_invoices if
+                                 inv._get_reconciled_payments() and inv._get_reconciled_payments()[
+                                     0].journal_id.type == "cash"])
 
             # Factures fournisseurs CASH uniquement
             vendor_bills = self.env['account.move'].search([
@@ -133,7 +135,9 @@ class AccountDailyBalance(models.Model):
                     'debit': bill.amount_total,
                     'credit': 0.0,
                 })
-            total_debit += sum([bill.amount_total for bill in vendor_bills if bill._get_reconciled_payments() and bill._get_reconciled_payments()[0].journal_id.type == "cash"])
+            total_debit += sum([bill.amount_total for bill in vendor_bills if
+                                bill._get_reconciled_payments() and bill._get_reconciled_payments()[
+                                    0].journal_id.type == "cash"])
 
             # Dépenses RH
             hr_expenses = self.env['hr.expense'].search([
@@ -151,6 +155,10 @@ class AccountDailyBalance(models.Model):
                 })
             total_debit += sum(hr_expenses.mapped('total_amount'))
 
+            # Crecalcul des totaux
+            total_credit = sum(record.line_ids.mapped('credit'))
+            total_debit = sum(record.line_ids.mapped('debit'))
+
             nouveau_solde = record.ancien_solde + (total_credit - total_debit)
 
             record.write({
@@ -160,17 +168,77 @@ class AccountDailyBalance(models.Model):
                 'show_lines': True,
             })
 
+    # ------------------------------------------------------
+    # 🔹 Wizard Totaux
+    # ------------------------------------------------------
+    def action_update_totals_wizard(self):
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Wizard Totaux'),
+            'res_model': 'update.totals.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {'default_balance_id': self.id},
+        }
+
+
+class UpdateTotalsWizard(models.TransientModel):
+    _name = 'update.totals.wizard'
+    _description = 'Wizard Mettre à jour les totaux'
+
+    balance_id = fields.Many2one('account.daily.balance', string='Balance liée')
+    recette = fields.Float(string="Montant RECETTE", required=True)
+
+    def action_confirm(self):
+        self.ensure_one()
+
+        if not self.balance_id:
+            raise UserError(_("Aucune balance n'est liée au wizard."))
+
+        if self.recette <= 0:
+            raise UserError(_("Veuillez saisir un montant supérieur à 0."))
+
+        from datetime import datetime
+        current_year = datetime.now().year
+
+        last_line = self.env['account.daily.balance.line'].search(
+            [('reference', 'like', f"REC/{current_year}/%")],
+            order="reference desc",
+            limit=1
+        )
+
+        if last_line:
+            last_number = int(last_line.reference.split('/')[-1])
+            new_number = last_number + 1
+        else:
+            new_number = 1
+
+        new_ref = "REC/%s/%05d" % (current_year, new_number)
+
+        self.env['account.daily.balance.line'].create({
+            'balance_id': self.balance_id.id,
+            'reference': new_ref,
+            'libelle': 'RECETTE',
+            'payment': 'cash',
+            'debit': 0.0,
+            'credit': self.recette,
+        })
+
+        self.balance_id.action_update_totals()
+
+        return {'type': 'ir.actions.act_window_close'}
+
 
 class AccountDailyBalanceLine(models.Model):
     _name = 'account.daily.balance.line'
     _description = 'Ligne du rapport journalier Débit/Crédit'
 
     balance_id = fields.Many2one('account.daily.balance', string='Balance', ondelete='cascade')
-    reference = fields.Char(string='Référence')
-    libelle = fields.Char(string='Libellé')
+    reference = fields.Char(string='REFERENCE FACTURE')
+    libelle = fields.Char(string='LIBELLE')
     payment = fields.Char(string='PAYMENT')
-    debit = fields.Float(string='Débit')
-    credit = fields.Float(string='Crédit')
+    debit = fields.Float(string='DEBIT')
+    credit = fields.Float(string='CREDIT')
 
 
 class AccountDailyBalanceInitWizard(models.TransientModel):
@@ -199,20 +267,35 @@ class AccountPaymentRegister(models.TransientModel):
         self.journal_type = self.journal_id.type if self.journal_id else ""
 
     def action_create_payments(self):
-        # Appel du traitement normal pour créer le paiement
         payments = super(AccountPaymentRegister, self).action_create_payments()
 
-        # Vérifier si le paiement est Cash
         if self.journal_id.type == "cash":
-            # Récupérer la balance du jour
             today = fields.Date.context_today(self.env['account.daily.balance'])
             balance = self.env['account.daily.balance'].search([('date', '=', today)], limit=1)
 
-            # Si aucune balance de la journée n'existe -> en créer une
             if not balance:
                 balance = self.env['account.daily.balance'].create({'date': today})
 
-            # Appeler automatiquement la mise à jour
             balance.action_update_totals()
 
         return payments
+
+
+class HrExpenseSheet(models.Model):
+    _inherit = 'hr.expense.sheet'
+
+    def action_sheet_move_create(self):
+        res = super(HrExpenseSheet, self).action_sheet_move_create()
+
+        # Quand la dépense est réellement comptabilisée
+        for sheet in self:
+            today = fields.Date.context_today(self.env['account.daily.balance'])
+            balance = self.env['account.daily.balance'].search([('date', '=', today)], limit=1)
+
+            if not balance:
+                balance = self.env['account.daily.balance'].create({'date': today})
+
+            balance.action_update_totals()
+
+        return res
+

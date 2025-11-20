@@ -5,9 +5,9 @@
         <field name="arch" type="xml">
             <form string="Totaux Journaliers">
                 <header>
-                    <button name="action_update_totals"
+                    <button name="action_update_totals_wizard"
                             type="object"
-                            string="Mettre à jour les totaux"
+                            string="AJOUT RECETTE DU JOUR"
                             class="btn-primary"/>
                 </header>
 
@@ -55,6 +55,33 @@
         </field>
     </record>
 
+    <!-- Wizard recette -->
+    <record id="view_update_totals_wizard_form" model="ir.ui.view">
+        <field name="name">update.totals.wizard.form</field>
+        <field name="model">update.totals.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Wizard Totaux">
+                <field name="balance_id" invisible="1"/>
+                <group>
+                    <field name="recette"/>
+                </group>
+                <footer>
+                    <button string="Confirmer" type="object" name="action_confirm" class="btn-primary"/>
+                    <button string="Annuler" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action to open wizard recette -->
+    <record id="action_update_totals_wizard" model="ir.actions.act_window">
+        <field name="name">Wizard Update Totals</field>
+        <field name="res_model">update.totals.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+
+
     <!-- Wizard -->
     <record id="view_account_daily_balance_init_wizard" model="ir.ui.view">
         <field name="name">account.daily.balance.init.wizard.form</field>
@@ -73,13 +100,13 @@
     </record>
 
     <record id="action_paid_daily_total" model="ir.actions.act_window">
-        <field name="name">Totaux Journaliers</field>
+        <field name="name">Journaux de trésorerie</field>
         <field name="res_model">account.daily.balance</field>
         <field name="view_mode">tree,form</field>
     </record>
 
     <menuitem id="menu_paid_totals_main"
-              name="Rapports Financiers"
+              name="Trésorerie"
               sequence="50"/>
     <menuitem id="menu_paid_totals_list"
               name="Totaux Journaliers"
