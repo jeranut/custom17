@@ -29,14 +29,15 @@
         <field name="arch" type="xml">
             <form string="Totaux Journaliers Mobile">
                 <header>
-                    <button name="action_update_totals_mobile" type="object" string="UPDATE"
-                            class="oe_highlight"/>
+
                     <button name="action_update_totals_wizard_mobile" type="object" string="DEPOT"
                             class="oe_highlight"/>
                     <button name="action_open_retrait_wizard"
                             type="object"
-                            string="Retrait"
-                            class="btn btn-danger"/>
+                            string="RETRAIT"
+                            class="btn-success"/>
+                    <button name="action_update_totals_mobile" type="object" string="UPDATE"
+                            class="btn-success"/>
                     <button name="%(action_regule_mobile_wizard)d"
                             type="action"
                             string="REGULE"
@@ -66,6 +67,7 @@
                                    string=""
                                    decoration-danger="regule_badge == 'REGULE'"
                                    width="50"/>
+                            <field name="categorie" string="Catégorie" width="100"/>
                             <field name="reference"/>
                             <field name="libelle"/>
                             <field name="payment"/>

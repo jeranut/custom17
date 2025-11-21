@@ -22,7 +22,7 @@
                     <button name="action_update_totals"
                             type="object"
                             string="UPDATE"
-                            class="btn-primary"/>
+                            class="btn-success"/>
 
                     <button name="%(action_regule_wizard)d"
                             type="action"
@@ -64,6 +64,7 @@
                                    width="50"/>
 
                             <field name="id" string="ID" width="40"/>
+                            <field name="categorie" string="Catégorie" width="100"/>
                             <field name="reference"/>
                             <field name="libelle"/>
                             <field name="payment"/>

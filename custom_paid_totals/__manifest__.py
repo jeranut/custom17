@@ -14,7 +14,11 @@
         'views/invoice_date_read_only.xml',
 
     ],
-
-    'installable': True,
-    'application': True,
-}
+    'assets': {
+        'web.assets_backend': [
+            'custom_paid_totals/static/src/scss/icon.scss',
+        ],
+    },
+        'installable': True,
+        'application': True,
+    }

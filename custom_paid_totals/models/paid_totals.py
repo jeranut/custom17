@@ -1,6 +1,7 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError
 from datetime import timedelta
+from datetime import datetime
 
 
 class AccountDailyBalance(models.Model):
@@ -124,6 +125,7 @@ class AccountDailyBalance(models.Model):
 
                 if existing:
                     existing.write({
+                        'categorie': "FACTURE CLIENT",
                         'libelle': inv.journal_label,
                         'payment': "cash",
                         'debit': 0.0,
@@ -133,6 +135,7 @@ class AccountDailyBalance(models.Model):
                     self.env['account.daily.balance.line'].create({
                         'balance_id': record.id,
                         'reference': inv.name,
+                        'categorie': "FACTURE CLIENT",
                         'libelle': inv.journal_label,
                         'payment': "cash",
                         'debit': 0.0,
@@ -165,6 +168,7 @@ class AccountDailyBalance(models.Model):
 
                 if existing:
                     existing.write({
+                        'categorie': "FACTURE FOURNISSEUR",
                         'libelle': bill.journal_label,
                         'payment': "cash",
                         'debit': bill.amount_total,
@@ -174,6 +178,7 @@ class AccountDailyBalance(models.Model):
                     self.env['account.daily.balance.line'].create({
                         'balance_id': record.id,
                         'reference': bill.name,
+                        'categorie': "FACTURE FOURNISSEUR",
                         'libelle': bill.journal_label,
                         'payment': "cash",
                         'debit': bill.amount_total,
@@ -184,6 +189,8 @@ class AccountDailyBalance(models.Model):
                                 bill._get_reconciled_payments() and bill._get_reconciled_payments()[
                                     0].journal_id.type == "cash"])
 
+            current_year = datetime.now().year
+
             # Dépenses RH (filtrées par company)
             hr_expenses = self.env['hr.expense'].search([
                 ('state', '=', 'done'),
@@ -191,23 +198,43 @@ class AccountDailyBalance(models.Model):
                 ('company_id', '=', record.company_id.id),
             ])
             for exp in hr_expenses:
+                last_line = self.env['account.daily.balance.line'].search(
+                    [
+                        ('reference', 'like', f"DEP/{current_year}/%"),
+                        ('balance_id', '=', record.id),
+                    ],
+                    order="reference desc",
+                    limit=1
+                )
+
+                if last_line:
+                    last_number = int(last_line.reference.split('/')[-1])
+                    new_number = last_number + 1
+                else:
+                    new_number = 1
+
+                new_ref = "DEP/%s/%05d" % (current_year, new_number)
+
                 existing = self.env['account.daily.balance.line'].search([
                     ('balance_id', '=', record.id),
-                    ('reference', '=', exp.name)
+                    ('expense_id', '=', exp.id),
                 ], limit=1)
 
                 if existing:
                     existing.write({
-                        'libelle': 'Dépense RH',
-                        'payment': '',
+                        'categorie': exp.product_id.name or "",
+                        'libelle': f"Dépense - {exp.name}",
+                        'payment': 'cash',
                         'debit': exp.total_amount,
                         'credit': 0.0,
                     })
                 else:
                     self.env['account.daily.balance.line'].create({
                         'balance_id': record.id,
-                        'reference': exp.name,
-                        'libelle': 'Dépense RH',
+                        'expense_id': exp.id,
+                        'reference': new_ref,
+                        'categorie': exp.product_id.name or "",
+                        'libelle': f"Dépense - {exp.name}",
                         'payment': '',
                         'debit': exp.total_amount,
                         'credit': 0.0,
@@ -308,6 +335,12 @@ class AccountDailyBalanceLine(models.Model):
         string="Ligne d'origine",
         readonly=True
     )
+    expense_id = fields.Many2one(
+        'hr.expense',
+        string='Dépense RH',
+        readonly=True,
+    )
+    categorie = fields.Char(string="Catégorie")
     # company_id lié à la balance pour compatibilité multientreprise
     company_id = fields.Many2one('res.company', related='balance_id.company_id', store=True, readonly=True)
 

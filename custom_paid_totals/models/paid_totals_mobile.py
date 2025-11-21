@@ -164,6 +164,7 @@ class AccountDailyBalanceMobile(models.Model):
 
                 vals = {
                     'balance_id': record.id,
+                    'categorie': "FACTURE CLIENT",
                     'reference': inv.name,
                     'libelle': getattr(inv, 'journal_label', inv.name),
                     'payment': "mobile",
@@ -206,6 +207,7 @@ class AccountDailyBalanceMobile(models.Model):
 
                 vals = {
                     'balance_id': record.id,
+                    'categorie': "FACTURE FOURNISSEUR",
                     'reference': bill.name,
                     'libelle': getattr(bill, 'journal_label', bill.name),
                     'payment': "mobile",
@@ -292,6 +294,7 @@ class UpdateTotalsMobileWizard(models.TransientModel):
         self.env['account.daily.balance.mobile.line'].create({
             'balance_id': self.balance_id.id,
             'reference': new_ref,
+            'categorie': "DEPOT",
             'libelle': 'RECETTE',
             'payment': 'mobile',
             'debit': 0.0,
@@ -320,6 +323,7 @@ class AccountDailyBalanceMobileLine(models.Model):
     credit = fields.Float(string='CREDIT')
     regule_badge = fields.Char(string="Badge", compute="_compute_regule_badge", store=True)
     origin_line_id = fields.Many2one('account.daily.balance.mobile.line', string="Ligne d'origine", readonly=True)
+    categorie = fields.Char(string="Catégorie")
     company_id = fields.Many2one(
         'res.company',
         string='Company',
@@ -520,6 +524,7 @@ class RetraitWizard(models.TransientModel):
             "balance_id": balance_obj.id,
             "reference": self.reference,
             "libelle": self.motif,
+            'categorie': "RETRAIT",
             "payment": "mobile",
             "debit": self.montant,
             "credit": 0.0,
