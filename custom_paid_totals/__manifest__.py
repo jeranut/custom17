@@ -8,6 +8,7 @@
     'data': [
         'security/ir.model.access.csv',
         'views/paid_totals_views.xml',
+        'views/paid_totals_views_mobile.xml',
         'views/journal_libel.xml',
         'views/invoice_date_read_only.xml',
     ],

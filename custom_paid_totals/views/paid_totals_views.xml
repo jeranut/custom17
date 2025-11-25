@@ -53,7 +53,7 @@
                            modifiers='{"invisible": [["show_lines", "=", false]]}'>
 
                         <tree create="false" edit="false" delete="false" default_order="id asc"
-                              decoration-danger="libelle == 'REGULE'"> <!--  Ligne REGULE en rouge -->
+                              decoration-danger="libelle == 'REGULE'" options="{'no_open': True}"> <!--  Ligne REGULE en rouge -->
                             <!-- 🏷 Badge REGULÉ affiché en rouge -->
                             <field name="regule_badge"
                                    widget="badge"
@@ -68,6 +68,11 @@
                             <field name="debit"/>
                             <field name="credit"/>
                         </tree>
+                        <form string="Détails (Lecture seule)" create="false" edit="false">
+                            <group>
+                                <h3>Lecture seule</h3>
+                            </group>
+                        </form>
                     </field>
 
                 </sheet>
@@ -161,13 +166,22 @@
         <field name="view_mode">tree,form</field>
     </record>
 
-    <menuitem id="menu_paid_totals_main"
-              name="Trésorerie"
-              sequence="50"/>
-    <menuitem id="menu_paid_totals_list"
-              name="Journaux"
-              parent="menu_paid_totals_main"
-              action="action_paid_daily_total"
-              sequence="1"/>
+   <!-- MENU PRINCIPAL TRESORERIE -->
+<menuitem id="menu_paid_totals_main"
+          name="Trésorerie"
+          sequence="50"/>
+
+<!-- MENU SECONDAIRE -->
+<menuitem id="menu_paid_totals_list"
+          name="Journaux"
+          parent="menu_paid_totals_main"
+          sequence="1"/>
+
+<!-- JOURNAL ESPECES -->
+<menuitem id="menu_cash_journal"
+          name="Journal Espèces"
+          parent="menu_paid_totals_list"
+          action="action_paid_daily_total"
+          sequence="1"/>
 
 </odoo>
