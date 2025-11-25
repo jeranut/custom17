@@ -4,5 +4,5 @@ from . import invoice_date_read_only
 from . import account_payment
 from . import paid_totals_mobile
 from . import account_payment_mobile
-from . import testpossession
+from . import add_journal_pos
 #from . import account_payment_register
