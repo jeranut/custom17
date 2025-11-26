@@ -12,6 +12,7 @@
         'views/paid_totals_views_mobile.xml',
         'views/journal_libel.xml',
         'views/invoice_date_read_only.xml',
+        'data/cron_account_daily_balance.xml',
 
     ],
     'assets': {
@@ -19,6 +20,6 @@
             'custom_paid_totals/static/src/scss/icon.scss',
         ],
     },
-        'installable': True,
-        'application': True,
-    }
+    'installable': True,
+    'application': True,
+}
